@@ -261,3 +261,55 @@ Public Sub Test_Facade_Version()
     AssertEqual "1.0.0", Net.Version
     AssertTrue Net Is Net, "Net() must return the same instance"
 End Sub
+
+Public Sub Test_Path_Combine()
+    AssertEqual "C:\a\b\c.txt", Net.Path.Combine("C:\a", "b", "c.txt")
+    AssertEqual "C:\a\b", Net.Path.Combine("C:\a\", "b")
+    AssertEqual "D:\x", Net.Path.Combine("C:\a", "D:\x")       ' rooted later part wins
+    AssertEqual "C:\a\b", Net.Path.Combine("C:\a", "", "b")    ' empty parts skipped
+    AssertEqual "", Net.Path.Combine("", "")                      ' all empty -> "" (as .NET)
+    AssertEqual "b", Net.Path.Combine("", "b")
+End Sub
+
+Public Sub Test_Path_FileNameParts()
+    AssertEqual "c.txt", Net.Path.GetFileName("C:\a\b\c.txt")
+    AssertEqual "", Net.Path.GetFileName("C:\a\b\")
+    AssertEqual "c", Net.Path.GetFileNameWithoutExtension("C:\a\b\c.txt")
+    AssertEqual ".txt", Net.Path.GetExtension("C:\a\b\c.txt")
+    AssertEqual "", Net.Path.GetExtension("C:\a\b\c")
+    AssertEqual ".gz", Net.Path.GetExtension("x.tar.gz")
+    AssertEqual "C:\a\b", Net.Path.GetDirectoryName("C:\a\b\c.txt")
+    AssertEqual "C:\a\b", Net.Path.GetDirectoryName("C:\a\b\")
+    AssertTrue Net.Path.HasExtension("a.b")
+    AssertFalse Net.Path.HasExtension("a")
+End Sub
+
+Public Sub Test_Path_ChangeExtension()
+    AssertEqual "C:\a\c.md", Net.Path.ChangeExtension("C:\a\c.txt", ".md")
+    AssertEqual "C:\a\c.md", Net.Path.ChangeExtension("C:\a\c.txt", "md")
+    AssertEqual "C:\a\c", Net.Path.ChangeExtension("C:\a\c.txt", "")
+    AssertEqual "C:\a\c.md", Net.Path.ChangeExtension("C:\a\c", ".md")
+End Sub
+
+Public Sub Test_Path_Roots()
+    AssertTrue Net.Path.IsPathRooted("C:\a")
+    AssertTrue Net.Path.IsPathRooted("\\server\share\a")
+    AssertFalse Net.Path.IsPathRooted("a\b")
+    AssertEqual "C:\", Net.Path.GetPathRoot("C:\a\b")
+    AssertEqual "\\server\share", Net.Path.GetPathRoot("\\server\share\a")
+    AssertEqual "", Net.Path.GetPathRoot("a\b")
+    AssertEqual "\", Net.Path.DirectorySeparatorChar
+End Sub
+
+Public Sub Test_Path_FullAndTemp()
+    Dim tmp As String
+    tmp = Net.Path.GetTempPath()
+    AssertEqual "\", Right$(tmp, 1)
+    AssertEqual "C:\a\c", Net.Path.GetFullPath("C:\a\b\..\c")
+    Dim f As String
+    f = Net.Path.GetTempFileName()
+    AssertTrue NewFso().FileExists(f), "GetTempFileName must create the file"
+    NewFso().DeleteFile f
+    AssertTrue Len(Net.Path.GetRandomFileName()) >= 8
+    AssertTrue Net.Path.GetRandomFileName() <> Net.Path.GetRandomFileName()
+End Sub
