@@ -255,6 +255,57 @@ Public Sub AssertRaised(ByVal expectedNumber As Long, Optional ByVal message As 
     End If
 End Sub
 
+' ===== File helpers =====
+
+' Creates a fresh folder under the temp path. RunAllTests deletes it after the test.
+Public Function NewTempDir() As String
+    Dim path As String
+    path = Net.Path.GetTempPath() & "dotnetvba-" & NewFso().GetTempName()
+    NewFso().CreateFolder path
+    mTempDir = path
+    NewTempDir = path
+End Function
+
+Public Sub WriteBytes(ByVal path As String, ByRef bytes() As Byte)
+    Dim stm As Object
+    Set stm = CreateObject("ADODB.Stream")
+    stm.Type = 1                       ' adTypeBinary
+    stm.Open
+    If UBound(bytes) >= LBound(bytes) Then stm.Write bytes
+    stm.SaveToFile path, 2             ' adSaveCreateOverWrite
+    stm.Close
+End Sub
+
+Public Function ReadBytes(ByVal path As String) As Byte()
+    Dim stm As Object
+    Dim data As Variant
+    Dim empty0() As Byte
+    Set stm = CreateObject("ADODB.Stream")
+    stm.Type = 1                       ' adTypeBinary
+    stm.Open
+    stm.LoadFromFile path
+    data = stm.Read(-1)                ' adReadAll
+    stm.Close
+    If IsNull(data) Then
+        ReDim empty0(0 To -1)          ' empty file: Read returns Null
+        ReadBytes = empty0
+    Else
+        ReadBytes = data
+    End If
+End Function
+
+' Fixture writer: text mode, BOM is whatever ADODB emits for the charset.
+Public Sub WriteTextRaw(ByVal path As String, ByVal text As String, ByVal charset As String)
+    Dim stm As Object
+    Set stm = CreateObject("ADODB.Stream")
+    stm.Type = 2                       ' adTypeText
+    stm.Charset = charset
+    stm.Open
+    stm.WriteText text
+    stm.SaveToFile path, 2             ' adSaveCreateOverWrite
+    stm.Close
+End Sub
+
 ' ===== Tests =====
 
 Public Sub Test_Facade_Version()
@@ -328,4 +379,17 @@ Public Sub Test_Path_EdgeCases()
     AssertEqual "//server/share", Net.Path.GetPathRoot("//server/share/a")
     AssertEqual "//server/share/a", Net.Path.GetDirectoryName("//server/share/a/b.txt")
     AssertEqual NewFso().GetAbsolutePathName(CurDir$) & "\y", Net.Path.GetFullPath("x\..\y")
+End Sub
+
+Public Sub Test_Harness_TempDirAndBytes()
+    Dim dir As String
+    dir = NewTempDir()
+    AssertTrue NewFso().FolderExists(dir)
+    Dim b(0 To 2) As Byte
+    b(0) = 65: b(1) = 66: b(2) = 67
+    WriteBytes dir & "\x.bin", b
+    Dim r() As Byte
+    r = ReadBytes(dir & "\x.bin")
+    AssertEqual 2, UBound(r)
+    AssertEqual 67, r(2)
 End Sub
