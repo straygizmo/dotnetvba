@@ -1,1 +1,7 @@
 .superpowers/
+dist/
+~$*
+*.xlsm
+*.docm
+*.log
+tests/out/
