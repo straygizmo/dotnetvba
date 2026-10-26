@@ -197,8 +197,8 @@ function Invoke-ImportModeRun {
             Write-Host "$App FAIL: dialog shown during run: $text"
         }
         if ($state.Dialogs.Count -gt 0 -and $failures -eq 0) { $failures = 1 }
-        # VBA's TextStream writes the ANSI code page.
-        if (Test-Path $log) { Get-Content $log -Encoding ansi | ForEach-Object { Write-Host $_ } }
+        # RunAllTests writes the log as UTF-16.
+        if (Test-Path $log) { Get-Content $log -Encoding Unicode | ForEach-Object { Write-Host $_ } }
     } finally {
         if ($null -ne $doc) {
             try {

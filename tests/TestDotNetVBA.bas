@@ -34,7 +34,8 @@ Public Function RunAllTests(ByVal outputPath As String) As Long
     Dim failCount As Long
 
     Set fso = CreateObject("Scripting.FileSystemObject")
-    Set logFile = fso.CreateTextFile(outputPath, True)
+    ' Unicode (UTF-16) so any failure text can be written.
+    Set logFile = fso.CreateTextFile(outputPath, True, True)
     Set components = FindOwnComponents()
     Set testNames = FindTestNames(components(MODULE_NAME).CodeModule)
     AddDispatcher components, testNames
