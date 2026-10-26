@@ -86,13 +86,13 @@ End Function
 Public Function GetPathRoot(ByVal path As String) As String
     Dim sepPos As Long
     If Len(path) = 0 Then Exit Function
-    If Left$(path, 2) = "\\" Then
-        sepPos = InStr(3, path, "\")
+    If IsSeparator(Left$(path, 1)) And IsSeparator(Mid$(path, 2, 1)) Then
+        sepPos = NextSeparator(path, 3)
         If sepPos = 0 Then
             GetPathRoot = path
             Exit Function
         End If
-        sepPos = InStr(sepPos + 1, path, "\")
+        sepPos = NextSeparator(path, sepPos + 1)
         If sepPos = 0 Then
             GetPathRoot = path
         Else
@@ -117,14 +117,23 @@ Public Function GetTempPath() As String
     GetTempPath = NewFso().GetSpecialFolder(2).Path & "\"
 End Function
 
+' Creates a new zero-byte file with a unique name; never touches an existing file.
 Public Function GetTempFileName() As String
+    Dim fso As Object
     Dim fullName As String
     Dim fileNum As Long
-    fullName = GetTempPath() & NewFso().GetTempName()
+    Set fso = NewFso()
+    Do
+        fullName = GetTempPath() & fso.GetTempName()
+    Loop While fso.FileExists(fullName)
+    On Error GoTo Failed
     fileNum = FreeFile
     Open fullName For Output As #fileNum
     Close #fileNum
     GetTempFileName = fullName
+    Exit Function
+Failed:
+    ThrowDotNet DotNetIO, "DotNetPath.GetTempFileName", "Unable to create a temporary file: " & Err.Description
 End Function
 
 Public Function GetRandomFileName() As String
@@ -145,4 +154,21 @@ Private Function LastSeparator(ByVal path As String) As Long
     a = InStrRev(path, "\")
     b = InStrRev(path, "/")
     If a > b Then LastSeparator = a Else LastSeparator = b
+End Function
+
+' First separator at or after startPos, or 0.
+Private Function NextSeparator(ByVal path As String, ByVal startPos As Long) As Long
+    Dim a As Long
+    Dim b As Long
+    a = InStr(startPos, path, "\")
+    b = InStr(startPos, path, "/")
+    If a = 0 Then
+        NextSeparator = b
+    ElseIf b = 0 Then
+        NextSeparator = a
+    ElseIf a < b Then
+        NextSeparator = a
+    Else
+        NextSeparator = b
+    End If
 End Function

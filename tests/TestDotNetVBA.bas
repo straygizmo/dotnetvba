@@ -313,3 +313,19 @@ Public Sub Test_Path_FullAndTemp()
     AssertTrue Len(Net.Path.GetRandomFileName()) >= 8
     AssertTrue Net.Path.GetRandomFileName() <> Net.Path.GetRandomFileName()
 End Sub
+
+Public Sub Test_Path_EdgeCases()
+    AssertEqual "", Net.Path.GetDirectoryName("C:\")
+    AssertEqual "", Net.Path.GetDirectoryName("a.txt")
+    AssertEqual "\b", Net.Path.Combine("C:\a", "\b")
+    AssertEqual "C:\a\b", Net.Path.Combine("C:\a\", "b")
+    AssertEqual "C:\a\b\", Net.Path.Combine("C:\a", "b\")
+    AssertEqual ".gitignore", Net.Path.GetExtension(".gitignore")
+    AssertEqual "", Net.Path.GetFileNameWithoutExtension(".gitignore")
+    AssertEqual "\\server\share\a", Net.Path.GetDirectoryName("\\server\share\a\b.txt")
+    AssertEqual "c.txt", Net.Path.GetFileName("C:/a/b/c.txt")
+    AssertEqual "C:/", Net.Path.GetPathRoot("C:/a/b")
+    AssertEqual "//server/share", Net.Path.GetPathRoot("//server/share/a")
+    AssertEqual "//server/share/a", Net.Path.GetDirectoryName("//server/share/a/b.txt")
+    AssertEqual NewFso().GetAbsolutePathName(CurDir$) & "\y", Net.Path.GetFullPath("x\..\y")
+End Sub
