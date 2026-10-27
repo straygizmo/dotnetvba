@@ -19,6 +19,7 @@ Private mEnvironment As DotNetEnvironment
 Private mIniFile As DotNetIniFile
 Private mThread As DotNetThread
 Private mProcess As DotNetProcess
+Private mDialog As DotNetDialog
 
 Public Property Get Version() As String
     Version = VERSION_STRING
@@ -52,6 +53,11 @@ End Property
 Public Property Get Thread() As DotNetThread
     If mThread Is Nothing Then Set mThread = New DotNetThread
     Set Thread = mThread
+End Property
+
+Public Property Get Dialog() As DotNetDialog
+    If mDialog Is Nothing Then Set mDialog = New DotNetDialog
+    Set Dialog = mDialog
 End Property
 
 Public Property Get Process() As DotNetProcess

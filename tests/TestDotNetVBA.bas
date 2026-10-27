@@ -819,3 +819,14 @@ Public Sub Test_Process_StartValidation()
     AssertRaised vbObjectError + 1001
     On Error GoTo 0
 End Sub
+
+Public Sub Test_Dialog_Reachable()
+    AssertTrue Not Net.Dialog Is Nothing
+    AssertEqual "DotNetDialog", TypeName(Net.Dialog)
+    On Error Resume Next
+    Net.Dialog.OpenFile "t", "Text"                                  ' filterName without pattern
+    AssertRaised vbObjectError + 1001
+    Net.Dialog.OpenFile "t", "", "", "C:\definitely\missing\dir"
+    AssertRaised vbObjectError + 1004
+    On Error GoTo 0
+End Sub
