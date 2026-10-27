@@ -802,3 +802,20 @@ Public Sub Test_IniFile_NullStringWritesEmptyValue()
     AssertArrayEqual Split("k", ","), Net.IniFile.GetKeys(p, "S")
     AssertEqual "", Net.IniFile.ReadString(p, "S", "k", "dflt")
 End Sub
+
+Public Sub Test_Thread_Sleep()
+    Dim t0 As Single: t0 = Timer
+    Net.Thread.Sleep 300
+    AssertTrue Timer - t0 >= 0.25, "slept " & (Timer - t0)
+    On Error Resume Next
+    Net.Thread.Sleep -1
+    AssertRaised vbObjectError + 1002
+    On Error GoTo 0
+End Sub
+
+Public Sub Test_Process_StartValidation()
+    On Error Resume Next
+    Net.Process.Start ""
+    AssertRaised vbObjectError + 1001
+    On Error GoTo 0
+End Sub

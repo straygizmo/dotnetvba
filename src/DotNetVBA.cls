@@ -17,6 +17,8 @@ Private mDirectory As DotNetDirectory
 Private mFile As DotNetFile
 Private mEnvironment As DotNetEnvironment
 Private mIniFile As DotNetIniFile
+Private mThread As DotNetThread
+Private mProcess As DotNetProcess
 
 Public Property Get Version() As String
     Version = VERSION_STRING
@@ -45,6 +47,16 @@ End Property
 Public Property Get IniFile() As DotNetIniFile
     If mIniFile Is Nothing Then Set mIniFile = New DotNetIniFile
     Set IniFile = mIniFile
+End Property
+
+Public Property Get Thread() As DotNetThread
+    If mThread Is Nothing Then Set mThread = New DotNetThread
+    Set Thread = mThread
+End Property
+
+Public Property Get Process() As DotNetProcess
+    If mProcess Is Nothing Then Set mProcess = New DotNetProcess
+    Set Process = mProcess
 End Property
 
 ' Returns a new, empty DotNetList on every call.
