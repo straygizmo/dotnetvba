@@ -15,6 +15,7 @@ Private Const VERSION_STRING As String = "1.0.0"
 Private mPath As DotNetPath
 Private mDirectory As DotNetDirectory
 Private mFile As DotNetFile
+Private mEnvironment As DotNetEnvironment
 
 Public Property Get Version() As String
     Version = VERSION_STRING
@@ -33,4 +34,9 @@ End Property
 Public Property Get File() As DotNetFile
     If mFile Is Nothing Then Set mFile = New DotNetFile
     Set File = mFile
+End Property
+
+Public Property Get Environment() As DotNetEnvironment
+    If mEnvironment Is Nothing Then Set mEnvironment = New DotNetEnvironment
+    Set Environment = mEnvironment
 End Property

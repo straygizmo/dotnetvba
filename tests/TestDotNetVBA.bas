@@ -604,3 +604,34 @@ Public Sub Test_File_LinesNewlineOnly()
     WriteTextRaw p, "", "utf-8"
     AssertEqual -1, UBound(Net.File.ReadAllLines(p))
 End Sub
+
+Public Sub Test_Environment_Folders()
+    Dim d As String: d = Net.Environment.GetFolderPath(SpecialFolder_Desktop)
+    AssertTrue Net.Directory.Exists(d), "Desktop: " & d
+    AssertTrue Net.Directory.Exists(Net.Environment.GetFolderPath(SpecialFolder_MyDocuments))
+    AssertTrue Net.Directory.Exists(Net.Environment.GetFolderPath(SpecialFolder_ApplicationData))
+    AssertTrue Net.Directory.Exists(Net.Environment.GetFolderPath(SpecialFolder_LocalApplicationData))
+    AssertTrue Net.Directory.Exists(Net.Environment.GetFolderPath(SpecialFolder_UserProfile))
+    AssertTrue Net.Directory.Exists(Net.Environment.GetFolderPath(SpecialFolder_ProgramFiles))
+    AssertTrue Net.Directory.Exists(Net.Environment.GetFolderPath(SpecialFolder_Templates))
+    On Error Resume Next
+    Net.Environment.GetFolderPath 999
+    AssertRaised vbObjectError + 1001
+    On Error GoTo 0
+End Sub
+
+Public Sub Test_Environment_Misc()
+    AssertEqual vbCrLf, Net.Environment.NewLine
+    AssertTrue Len(Net.Environment.UserName) > 0
+    AssertTrue Len(Net.Environment.MachineName) > 0
+    AssertEqual Environ$("USERNAME"), Net.Environment.UserName
+    AssertEqual "", Net.Environment.GetEnvironmentVariable("DOTNETVBA_NOT_SET_12345")
+    AssertEqual Environ$("TEMP"), Net.Environment.GetEnvironmentVariable("TEMP")
+    AssertEqual Environ$("TEMP") & "\x", Net.Environment.ExpandEnvironmentVariables("%TEMP%\x")
+    AssertTrue Net.Environment.Is64BitProcess
+    Dim dir As String: dir = NewTempDir()
+    Dim saved As String: saved = Net.Environment.CurrentDirectory
+    Net.Environment.CurrentDirectory = dir
+    AssertEqual dir, Net.Environment.CurrentDirectory
+    Net.Environment.CurrentDirectory = saved
+End Sub
