@@ -1,7 +1,7 @@
 # DotNetVBA — Design
 
 Date: 2026-10-27
-Status: draft for approval
+Status: implemented
 
 ## 1. Intent
 
@@ -39,11 +39,11 @@ Next
 ```
 
 Inside the same project (classes imported directly) `Dim d As New
-DotNetVBA` also works; `Net()` is the documented way.
+DotNet` also works; `Net()` is the documented way.
 
 ## 2. Goals
 
-- One entry point: `Net` (a public function returning the `DotNetVBA`
+- One entry point: `Net` (a public function returning the `DotNet`
   facade singleton). Static-style .NET classes hang off it as properties
   (`Net.File`, `Net.Directory`, `Net.Path`, `Net.Environment`,
   `Net.Dialog`, `Net.IniFile`, `Net.Thread`, `Net.Process`).
@@ -97,7 +97,8 @@ DotNetVBA` also works; `Net()` is the documented way.
   only. Follow the `vba-coding-conventions` skill when writing code.
 - Class naming: every class module is prefixed `DotNet` to avoid
   colliding with host / FSO type names (`File`, `Folder`, `Path`).
-  Facade: `DotNetVBA`. Classes: `DotNetFile`, `DotNetDirectory`,
+  Facade: `DotNet` (not `DotNetVBA`: VBA forbids a module name equal to
+  the project name). Classes: `DotNetFile`, `DotNetDirectory`,
   `DotNetPath`, `DotNetEnvironment`, `DotNetList`, `DotNetDialog`,
   `DotNetIniFile`, `DotNetThread`, `DotNetProcess`. Standard module:
   `DotNetVBAGlobals` (holds `Net()`).
@@ -140,7 +141,7 @@ Return type notes: "String()" means a 0-based `String` array. When there
 are no results, return an empty array with `UBound = -1` (obtainable via
 `Split(vbNullString)`), never `Nothing` or an uninitialized array.
 
-### 6.1 DotNetVBA (facade)
+### 6.1 DotNet (facade)
 
 | Member | Returns | Notes |
 |---|---|---|
@@ -159,7 +160,7 @@ are no results, return an empty array with `UBound = -1` (obtainable via
 
 | Member | Signature |
 |---|---|
-| `Net` | `() As DotNetVBA` — returns a module-level singleton, created on first call. Public, so it is callable from referencing projects as `Net.File.Exists(...)`. |
+| `Net` | `() As DotNet` — returns a module-level singleton, created on first call. Public, so it is callable from referencing projects as `Net.File.Exists(...)`. |
 
 ### 6.2 DotNetFile (System.IO.File)
 
@@ -323,8 +324,11 @@ program that uses INI files.
 
 | Member | Signature |
 |---|---|
-| `Read` | `(path As String, section As String, keyName As String, Optional defaultValue As String = "") As String` |
-| `Write` | `(path As String, section As String, keyName As String, value As String)` — creates file / section as needed |
+| `ReadString` | `(path As String, section As String, keyName As String, Optional defaultValue As String = "") As String` |
+| `WriteString` | `(path As String, section As String, keyName As String, value As String)` — creates file / section as needed |
+
+(`Write` is a VBA keyword and cannot name a procedure, so the pair is
+`ReadString` / `WriteString`, mirroring the Win32 API names.)
 | `DeleteKey` | `(path As String, section As String, keyName As String)` |
 
 Parameter is `keyName`, not `key`, because `Key` is reserved-ish in VBA
@@ -358,7 +362,8 @@ dotnetvba/
   .gitattributes            *.cls *.bas text eol=crlf
   src/
     DotNetVBAGlobals.bas
-    DotNetVBA.cls
+    DotNetVBAInternal.bas   Option Private Module: shared helpers, error enum
+    DotNet.cls
     DotNetFile.cls
     DotNetDirectory.cls
     DotNetPath.cls
