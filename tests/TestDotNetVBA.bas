@@ -469,3 +469,14 @@ Public Sub Test_Directory_MoveParentCurrent()
     AssertTrue Abs(Now - Net.Directory.GetLastWriteTime(dir & "\dst")) < 1 / 24
     AssertTrue Abs(Now - Net.Directory.GetCreationTime(dir & "\dst")) < 1 / 24
 End Sub
+
+Public Sub Test_Directory_SetCurrentDirectoryRelative()
+    Dim dir As String: dir = NewTempDir()
+    Net.Directory.CreateDirectory dir & "\sub"
+    Dim saved As String: saved = Net.Directory.GetCurrentDirectory()
+    Net.Directory.SetCurrentDirectory dir
+    Net.Directory.SetCurrentDirectory "sub"
+    Dim after As String: after = Net.Directory.GetCurrentDirectory()
+    Net.Directory.SetCurrentDirectory saved
+    AssertEqual dir & "\sub", after
+End Sub

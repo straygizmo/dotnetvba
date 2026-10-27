@@ -90,12 +90,13 @@ End Function
 
 Public Sub SetCurrentDirectory(ByVal path As String)
     Dim target As String
-    target = TrimPath(RequirePath(path, "SetCurrentDirectory"))
+    target = RequirePath(path, "SetCurrentDirectory")
     On Error GoTo Fail
+    target = TrimPath(NewFso().GetAbsolutePathName(target))
     If Not NewFso().FolderExists(target) Then
         ThrowDotNet DotNetDirectoryNotFound, "DotNetDirectory.SetCurrentDirectory", "Could not find a part of the path '" & path & "'."
     End If
-    ChDrive Left$(target, 1)
+    If Mid$(target, 2, 1) = ":" Then ChDrive Left$(target, 1)
     ChDir target
     Exit Sub
 Fail:
