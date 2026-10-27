@@ -1,3 +1,4 @@
+#Requires -Version 7.0
 # Builds DotNetVBA.xlam from src\: imports every module and class into a new
 # workbook and saves it as an Excel add-in.
 # Prints "BUILT <path> (DotNetVBA <version>)" and exits 0; exits 1 on any failure.

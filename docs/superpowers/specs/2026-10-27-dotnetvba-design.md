@@ -326,16 +326,16 @@ program that uses INI files.
 |---|---|
 | `ReadString` | `(path As String, section As String, keyName As String, Optional defaultValue As String = "") As String` |
 | `WriteString` | `(path As String, section As String, keyName As String, value As String)` — creates file / section as needed |
-
-(`Write` is a VBA keyword and cannot name a procedure, so the pair is
-`ReadString` / `WriteString`, mirroring the Win32 API names.)
 | `DeleteKey` | `(path As String, section As String, keyName As String)` |
-
-Parameter is `keyName`, not `key`, because `Key` is reserved-ish in VBA
-(see the `vba-coding-conventions` skill).
 | `DeleteSection` | `(path As String, section As String)` |
 | `GetSections` | `(path As String) As String()` |
 | `GetKeys` | `(path As String, section As String) As String()` |
+
+(`Write` is a VBA keyword and cannot name a procedure, so the pair is
+`ReadString` / `WriteString`, mirroring the Win32 API names.)
+
+Parameter is `keyName`, not `key`, because `Key` is reserved-ish in VBA
+(see the `vba-coding-conventions` skill).
 
 Known limitation (document in README): the Win32 API writes ANSI unless
 the file already exists as UTF-16 with BOM.

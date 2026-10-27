@@ -1,5 +1,7 @@
 # DotNetVBA Implementation Plan
 
+> **Status:** Implemented; see spec for final names.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build DotNetVBA, a VBA class library with .NET API names (`Net.File`, `Net.Directory`, `Net.Path`, `Net.Environment`, `Net.List`, …), tested automatically against real Excel and Word, packaged as an `.xlam`, ready to tag `v1.0.0`.
@@ -23,13 +25,13 @@
 - Text default encoding `"utf-8"`, written **without** BOM. `WriteAllLines` terminates every line with `vbCrLf`.
 - `List` is 0-based; `Item` is the default member; `NewEnum` has `VB_UserMemId = -4`.
 - Git identity: the machine's global config (`straygizmo`). Commit after every task. Branch `main`.
-- Version string `"1.0.0"` lives in exactly one place: `Private Const VERSION_STRING As String = "1.0.0"` in `src/DotNetVBA.cls`.
+- Version string `"1.0.0"` lives in exactly one place: `Private Const VERSION_STRING As String = "1.0.0"` in `src/DotNet.cls`.
 
 ## Review Focus
 
 1. **Trailing backslash on directory paths** (`C:\tmp\dir\`): `Directory.Exists`, `GetFiles`, `Path.GetFileName` must behave like .NET (`GetFileName` returns `""`, `Exists` is True). Test pinned in Task 2 and Task 4.
 2. **Non-ASCII (Japanese) file and folder names**: every `File`/`Directory` member must round-trip a name containing `ChrW(&H3042)`. Test pinned in Task 4 and Task 5.
-3. **Empty-string arguments**: `File.Exists("")` and `Directory.Exists("")` return False and `Path.Combine("", "")` returns `""` (as .NET); `ReadAllText("")`, `Copy("", x)`, `IniFile.Read("", ...)` → `ArgumentException` (1001), never a raw FSO error. Tests pinned in Tasks 2, 4, 5, 8.
+3. **Empty-string arguments**: `File.Exists("")` and `Directory.Exists("")` return False and `Path.Combine("", "")` returns `""` (as .NET); `ReadAllText("")`, `Copy("", x)`, `IniFile.ReadString("", ...)` → `ArgumentException` (1001), never a raw FSO error. Tests pinned in Tasks 2, 4, 5, 8.
 4. **Empty file and >32767 lines**: `ReadAllLines` on a 0-byte file returns an empty array; on a 40000-line file returns 40000 elements (no `Integer` overflow anywhere). Test pinned in Task 5.
 5. **Mixed value/object lists**: `Contains`/`IndexOf`/`Remove` on a list holding both a string and an object never raise type-mismatch; `Sort` on such a list raises `InvalidOperationException`. Test pinned in Task 7.
 
@@ -39,9 +41,9 @@
 
 | Path | Responsibility |
 |---|---|
-| `src/DotNetVBAGlobals.bas` | `Public Function Net() As DotNetVBA` singleton accessor. Nothing else public. |
+| `src/DotNetVBAGlobals.bas` | `Public Function Net() As DotNet` singleton accessor. Nothing else public. |
 | `src/DotNetVBAInternal.bas` | `Option Private Module`. Shared helpers: `ThrowDotNet`, `NewFso`, `EmptyStringArray`, `WildcardToLike`, `DotNetErrorNumber` enum. Invisible to referencing projects. |
-| `src/DotNetVBA.cls` | Facade: lazy properties for each class, `NewList`, `Version`. |
+| `src/DotNet.cls` | Facade: lazy properties for each class, `NewList`, `Version`. |
 | `src/DotNetPath.cls` | Pure string path functions. |
 | `src/DotNetDirectory.cls` | Folder operations over FSO. |
 | `src/DotNetFile.cls` | File operations and text IO over FSO + ADODB.Stream. |
@@ -80,11 +82,11 @@ Test module conventions used by every task (defined in Task 1):
 **Files:**
 - Delete: the five pre-existing `*.cls` files in the repository root
 - Create: `.gitignore`, `.gitattributes`, `LICENSE`
-- Create: `src/DotNetVBAGlobals.bas`, `src/DotNetVBAInternal.bas`, `src/DotNetVBA.cls`
+- Create: `src/DotNetVBAGlobals.bas`, `src/DotNetVBAInternal.bas`, `src/DotNet.cls`
 - Create: `tests/TestDotNetVBA.bas`, `tests/run-tests.ps1`
 
 **Interfaces:**
-- Produces: `Net() As DotNetVBA`; `DotNetVBA.Version As String`; `DotNetVBA.NewList()` is **not** yet present (Task 7).
+- Produces: `Net() As DotNet`; `DotNet.Version As String`; `DotNet.NewList()` is **not** yet present (Task 7).
 - Produces (internal): `ThrowDotNet(errNumber As DotNetErrorNumber, source As String, message As String)`; `NewFso() As Object`; `EmptyStringArray() As String()`; `Public Enum DotNetErrorNumber: DotNetArgument = 1001, DotNetArgumentOutOfRange = 1002, DotNetFileNotFound = 1003, DotNetDirectoryNotFound = 1004, DotNetIO = 1005, DotNetInvalidOperation = 1006, DotNetNotSupported = 1007`. `ThrowDotNet` raises `vbObjectError + errNumber`.
 - Produces (tests): the helper API listed in "File structure"; `RunAllTests(outputPath As String) As Long` returning the failure count and writing one line per test: `PASS <name>` or `FAIL <name>: <message>`, followed by a final line `TOTAL <n> FAILED <m>`.
 - Produces (runner): `tests/run-tests.ps1 [-Office Excel|Word|All] [-SkipAddIn]`, exit code = failures.
@@ -115,15 +117,15 @@ Public Function ExceptionName(ByVal errNumber As DotNetErrorNumber) As String  '
 
 `ThrowDotNet` builds the description as `ExceptionName(errNumber) & ": " & message` and the source as `"DotNetVBA." & source`.
 
-- [ ] **Step 4: Write `src/DotNetVBA.cls` with only `Version`**
+- [ ] **Step 4: Write `src/DotNet.cls` with only `Version`**
 
 Class header per Global Constraints, `Private Const VERSION_STRING As String = "1.0.0"`, `Public Property Get Version() As String`.
 
 - [ ] **Step 5: Write `src/DotNetVBAGlobals.bas`**
 
 ```vb
-Private mInstance As DotNetVBA
-Public Function Net() As DotNetVBA   ' creates mInstance on first call
+Private mInstance As DotNet
+Public Function Net() As DotNet   ' creates mInstance on first call
 ```
 
 - [ ] **Step 6: Write `tests/TestDotNetVBA.bas` with the harness and one smoke test**
@@ -172,7 +174,7 @@ git commit -m "chore: scaffold DotNetVBA with test harness and facade skeleton"
 
 **Files:**
 - Create: `src/DotNetPath.cls`
-- Modify: `src/DotNetVBA.cls` (add `Path` property)
+- Modify: `src/DotNet.cls` (add `Path` property)
 - Modify: `tests/TestDotNetVBA.bas`
 
 **Interfaces:**
@@ -252,7 +254,7 @@ Expected: all `Test_Path_*` PASS in Excel and Word; `FAILED 0`.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/DotNetPath.cls src/DotNetVBA.cls tests/TestDotNetVBA.bas
+git add src/DotNetPath.cls src/DotNet.cls tests/TestDotNetVBA.bas
 git commit -m "feat: add DotNetPath (System.IO.Path)"
 ```
 
@@ -301,7 +303,7 @@ git commit -m "test: add temp-dir fixture and byte helpers"
 
 **Files:**
 - Create: `src/DotNetDirectory.cls`
-- Modify: `src/DotNetVBA.cls` (add `Directory` property)
+- Modify: `src/DotNet.cls` (add `Directory` property)
 - Modify: `src/DotNetVBAInternal.bas` (add `WildcardToLike`)
 - Modify: `tests/TestDotNetVBA.bas`
 
@@ -406,7 +408,7 @@ Expected: all `Test_Directory_*` PASS in Excel and Word.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/DotNetDirectory.cls src/DotNetVBA.cls src/DotNetVBAInternal.bas tests/TestDotNetVBA.bas
+git add src/DotNetDirectory.cls src/DotNet.cls src/DotNetVBAInternal.bas tests/TestDotNetVBA.bas
 git commit -m "feat: add DotNetDirectory (System.IO.Directory)"
 ```
 
@@ -416,7 +418,7 @@ git commit -m "feat: add DotNetDirectory (System.IO.Directory)"
 
 **Files:**
 - Create: `src/DotNetFile.cls`
-- Modify: `src/DotNetVBA.cls` (add `File` property)
+- Modify: `src/DotNet.cls` (add `File` property)
 - Modify: `tests/TestDotNetVBA.bas`
 
 **Interfaces:**
@@ -563,7 +565,7 @@ Expected: all `Test_File_*` PASS in Excel and Word.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/DotNetFile.cls src/DotNetVBA.cls tests/TestDotNetVBA.bas
+git add src/DotNetFile.cls src/DotNet.cls tests/TestDotNetVBA.bas
 git commit -m "feat: add DotNetFile (System.IO.File) with BOM-less UTF-8"
 ```
 
@@ -573,7 +575,7 @@ git commit -m "feat: add DotNetFile (System.IO.File) with BOM-less UTF-8"
 
 **Files:**
 - Create: `src/DotNetEnvironment.cls`
-- Modify: `src/DotNetVBA.cls` (add `Environment` property)
+- Modify: `src/DotNet.cls` (add `Environment` property)
 - Modify: `tests/TestDotNetVBA.bas`
 
 **Interfaces:**
@@ -631,7 +633,7 @@ Expected: all `Test_Environment_*` PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/DotNetEnvironment.cls src/DotNetVBA.cls tests/TestDotNetVBA.bas
+git add src/DotNetEnvironment.cls src/DotNet.cls tests/TestDotNetVBA.bas
 git commit -m "feat: add DotNetEnvironment (System.Environment)"
 ```
 
@@ -641,7 +643,7 @@ git commit -m "feat: add DotNetEnvironment (System.Environment)"
 
 **Files:**
 - Create: `src/DotNetList.cls`
-- Modify: `src/DotNetVBA.cls` (add `NewList() As DotNetList`)
+- Modify: `src/DotNet.cls` (add `NewList() As DotNetList`)
 - Modify: `src/DotNetFile.cls` (`WriteAllLines`/`AppendAllLines` accept `DotNetList`)
 - Modify: `tests/TestDotNetVBA.bas`
 
@@ -787,7 +789,7 @@ Expected: all `Test_List_*` PASS in Excel and Word.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/DotNetList.cls src/DotNetVBA.cls src/DotNetFile.cls tests/TestDotNetVBA.bas
+git add src/DotNetList.cls src/DotNet.cls src/DotNetFile.cls tests/TestDotNetVBA.bas
 git commit -m "feat: add DotNetList (List<T>) with default member and For Each"
 ```
 
@@ -797,11 +799,11 @@ git commit -m "feat: add DotNetList (List<T>) with default member and For Each"
 
 **Files:**
 - Create: `src/DotNetIniFile.cls`
-- Modify: `src/DotNetVBA.cls` (add `IniFile` property)
+- Modify: `src/DotNet.cls` (add `IniFile` property)
 - Modify: `tests/TestDotNetVBA.bas`
 
 **Interfaces:**
-- Produces: `Net.IniFile` with `Read(ByVal path As String, ByVal section As String, ByVal keyName As String, Optional ByVal defaultValue As String = "") As String`, `Write(ByVal path As String, ByVal section As String, ByVal keyName As String, ByVal value As String)`, `DeleteKey(ByVal path As String, ByVal section As String, ByVal keyName As String)`, `DeleteSection(ByVal path As String, ByVal section As String)`, `GetSections(ByVal path As String) As String()`, `GetKeys(ByVal path As String, ByVal section As String) As String()`.
+- Produces: `Net.IniFile` with `ReadString(ByVal path As String, ByVal section As String, ByVal keyName As String, Optional ByVal defaultValue As String = "") As String`, `WriteString(ByVal path As String, ByVal section As String, ByVal keyName As String, ByVal value As String)`, `DeleteKey(ByVal path As String, ByVal section As String, ByVal keyName As String)`, `DeleteSection(ByVal path As String, ByVal section As String)`, `GetSections(ByVal path As String) As String()`, `GetKeys(ByVal path As String, ByVal section As String) As String()`.
 - Declares (private to the class):
 
 ```vb
@@ -816,16 +818,16 @@ Private Declare PtrSafe Function GetPrivateProfileSectionNamesW Lib "kernel32" (
 Public Sub Test_IniFile_ReadWrite()
     Dim dir As String: dir = NewTempDir()
     Dim p As String: p = dir & "\c.ini"
-    AssertEqual "dflt", Net.IniFile.Read(p, "S", "k", "dflt")       ' missing file -> default
-    Net.IniFile.Write p, "S", "k", "v1"                              ' creates file
+    AssertEqual "dflt", Net.IniFile.ReadString(p, "S", "k", "dflt")       ' missing file -> default
+    Net.IniFile.WriteString p, "S", "k", "v1"                              ' creates file
     AssertTrue Net.File.Exists(p)
-    AssertEqual "v1", Net.IniFile.Read(p, "S", "k")
-    AssertEqual "v1", Net.IniFile.Read(p, "s", "K")                  ' case-insensitive
-    Net.IniFile.Write p, "S", "k", "v2"
-    AssertEqual "v2", Net.IniFile.Read(p, "S", "k")
-    Net.IniFile.Write p, "S", "k2", ""
-    AssertEqual "", Net.IniFile.Read(p, "S", "k2", "dflt")           ' blank value is "", not default
-    Net.IniFile.Write p, "T", "x", "1"
+    AssertEqual "v1", Net.IniFile.ReadString(p, "S", "k")
+    AssertEqual "v1", Net.IniFile.ReadString(p, "s", "K")                  ' case-insensitive
+    Net.IniFile.WriteString p, "S", "k", "v2"
+    AssertEqual "v2", Net.IniFile.ReadString(p, "S", "k")
+    Net.IniFile.WriteString p, "S", "k2", ""
+    AssertEqual "", Net.IniFile.ReadString(p, "S", "k2", "dflt")           ' blank value is "", not default
+    Net.IniFile.WriteString p, "T", "x", "1"
     AssertArrayEqual Split("S,T", ","), Net.IniFile.GetSections(p)
     AssertArrayEqual Split("k,k2", ","), Net.IniFile.GetKeys(p, "S")
     Net.IniFile.DeleteKey p, "S", "k2"
@@ -834,9 +836,9 @@ Public Sub Test_IniFile_ReadWrite()
     AssertArrayEqual Split("S", ","), Net.IniFile.GetSections(p)
     AssertEqual -1, UBound(Net.IniFile.GetKeys(p, "missing"))
     On Error Resume Next
-    Net.IniFile.Write dir & "\nodir\c.ini", "S", "k", "v"
+    Net.IniFile.WriteString dir & "\nodir\c.ini", "S", "k", "v"
     AssertRaised vbObjectError + 1004
-    Net.IniFile.Read "", "S", "k"
+    Net.IniFile.ReadString "", "S", "k"
     AssertRaised vbObjectError + 1001
     On Error GoTo 0
 End Sub
@@ -845,7 +847,7 @@ Public Sub Test_IniFile_RelativePathIsResolved()
     Dim dir As String: dir = NewTempDir()
     Dim saved As String: saved = Net.Directory.GetCurrentDirectory()
     Net.Directory.SetCurrentDirectory dir
-    Net.IniFile.Write "rel.ini", "S", "k", "v"
+    Net.IniFile.WriteString "rel.ini", "S", "k", "v"
     AssertTrue Net.File.Exists(dir & "\rel.ini"), "relative path must resolve against the current directory, not the Windows folder"
     Net.Directory.SetCurrentDirectory saved
 End Sub
@@ -858,7 +860,7 @@ Expected: `FAIL Test_IniFile_*`.
 
 - [ ] **Step 3: Implement `src/DotNetIniFile.cls` and the facade property**
 
-Every member first resolves `path` with `NewFso().GetAbsolutePathName` (the Win32 API treats a bare name as living in the Windows directory) and raises `DotNetArgument` on empty path; `Write` raises `DotNetDirectoryNotFound` when the parent folder is missing (the API fails silently otherwise). Buffers are `String$(32767, vbNullChar)` passed with `StrPtr`; result length is the return value; lists are split on `vbNullChar` after trimming the double terminator; `DeleteKey` passes `0` for `lpString`, `DeleteSection` passes `0` for `lpKeyName`. `Read` uses a sentinel default (`vbNullChar & "DNV"`) to tell "key exists with empty value" from "key missing", then substitutes `defaultValue` only in the latter case.
+Every member first resolves `path` with `NewFso().GetAbsolutePathName` (the Win32 API treats a bare name as living in the Windows directory) and raises `DotNetArgument` on empty path; `WriteString` raises `DotNetDirectoryNotFound` when the parent folder is missing (the API fails silently otherwise). Buffers are `String$(32767, vbNullChar)` passed with `StrPtr`; result length is the return value; lists are split on `vbNullChar` after trimming the double terminator; `DeleteKey` passes `0` for `lpString`, `DeleteSection` passes `0` for `lpKeyName`. `ReadString` uses a sentinel default (`vbNullChar & "DNV"`) to tell "key exists with empty value" from "key missing", then substitutes `defaultValue` only in the latter case.
 
 - [ ] **Step 4: Run to verify they pass in both hosts**
 
@@ -868,7 +870,7 @@ Expected: all `Test_IniFile_*` PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/DotNetIniFile.cls src/DotNetVBA.cls tests/TestDotNetVBA.bas
+git add src/DotNetIniFile.cls src/DotNet.cls tests/TestDotNetVBA.bas
 git commit -m "feat: add DotNetIniFile on the Win32 private-profile API"
 ```
 
@@ -878,7 +880,7 @@ git commit -m "feat: add DotNetIniFile on the Win32 private-profile API"
 
 **Files:**
 - Create: `src/DotNetThread.cls`, `src/DotNetProcess.cls`
-- Modify: `src/DotNetVBA.cls` (add `Thread`, `Process` properties)
+- Modify: `src/DotNet.cls` (add `Thread`, `Process` properties)
 - Modify: `tests/TestDotNetVBA.bas`, create `tests/MANUAL.md`
 
 **Interfaces:**
@@ -928,7 +930,7 @@ Expected: `Test_Thread_Sleep` and `Test_Process_StartValidation` PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/DotNetThread.cls src/DotNetProcess.cls src/DotNetVBA.cls tests/TestDotNetVBA.bas tests/MANUAL.md
+git add src/DotNetThread.cls src/DotNetProcess.cls src/DotNet.cls tests/TestDotNetVBA.bas tests/MANUAL.md
 git commit -m "feat: add DotNetThread.Sleep and DotNetProcess.Start"
 ```
 
@@ -938,7 +940,7 @@ git commit -m "feat: add DotNetThread.Sleep and DotNetProcess.Start"
 
 **Files:**
 - Create: `src/DotNetDialog.cls`
-- Modify: `src/DotNetVBA.cls` (add `Dialog` property)
+- Modify: `src/DotNet.cls` (add `Dialog` property)
 - Modify: `tests/TestDotNetVBA.bas`
 
 **Interfaces:**
@@ -974,7 +976,7 @@ Expected: `PASS Test_Dialog_Reachable` in Excel and Word, no window appears, `FA
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/DotNetDialog.cls src/DotNetVBA.cls tests/TestDotNetVBA.bas
+git add src/DotNetDialog.cls src/DotNet.cls tests/TestDotNetVBA.bas
 git commit -m "feat: add DotNetDialog over Office FileDialog"
 ```
 
@@ -1008,7 +1010,7 @@ End Function
 
 - [ ] **Step 2: Write `build/build-xlam.ps1`**
 
-Reads the version with `Select-String 'VERSION_STRING As String = "([^"]+)"' src\DotNetVBA.cls`; starts Excel (invisible, `DisplayAlerts = $false`); `Workbooks.Add()`; `VBProject.Name = 'DotNetVBA'`; imports `src\*.bas` then `src\*.cls`; sets `BuiltinDocumentProperties('Title') = 'DotNetVBA'` and `('Comments') = "DotNetVBA $version - .NET-style API for VBA"`; removes an existing output file; `SaveAs($fullPath, 55)` (`xlOpenXMLAddIn`); closes; quits; releases COM; prints the BUILT line. Creates `dist\` if missing.
+Reads the version with `Select-String 'VERSION_STRING As String = "([^"]+)"' src\DotNet.cls`; starts Excel (invisible, `DisplayAlerts = $false`); `Workbooks.Add()`; `VBProject.Name = 'DotNetVBA'`; imports `src\*.bas` then `src\*.cls`; sets `BuiltinDocumentProperties('Title') = 'DotNetVBA'` and `('Comments') = "DotNetVBA $version - .NET-style API for VBA"`; removes an existing output file; `SaveAs($fullPath, 55)` (`xlOpenXMLAddIn`); closes; quits; releases COM; prints the BUILT line. Creates `dist\` if missing.
 
 - [ ] **Step 3: Replace the ADDIN placeholder in `tests/run-tests.ps1`**
 

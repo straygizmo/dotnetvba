@@ -1,3 +1,4 @@
+#Requires -Version 7.0
 # Runs the DotNetVBA test suite: source lint, import-mode runs in Excel and/or Word,
 # then the add-in boundary test (built .xlam referenced from a fresh workbook).
 # Exit code = number of failures (2 when VBA project access is not trusted).
@@ -146,20 +147,37 @@ function Start-OfficeSession {
     $processName = if ($App -eq 'Excel') { 'EXCEL' } else { 'WINWORD' }
     $before = @(Get-Process -Name $processName -ErrorAction SilentlyContinue | ForEach-Object Id)
     $session.OfficeApp = New-Object -ComObject "$App.Application"
-    $session.NewPids = @(Get-Process -Name $processName -ErrorAction SilentlyContinue |
-                         Where-Object { $before -notcontains $_.Id } | ForEach-Object Id)
-    $session.OfficeApp.Visible = $false
-    if ($App -eq 'Excel') {
-        $session.OfficeApp.DisplayAlerts = $false
-        $session.Docs = $session.OfficeApp.Workbooks
-    } else {
-        $session.OfficeApp.DisplayAlerts = 0
-        $session.Docs = $session.OfficeApp.Documents
-    }
-    if ($session.NewPids.Count -eq 1) {
-        $session.Watchdog = Start-Watchdog -ProcessId $session.NewPids[0] -State $session.State
-    } else {
-        Write-Host "WARN: could not identify the $App process; dialog watchdog disabled"
+    # The caller only gets $session on success, so a failure past this point
+    # must not leave the invisible process behind.
+    try {
+        $session.NewPids = @(Get-Process -Name $processName -ErrorAction SilentlyContinue |
+                             Where-Object { $before -notcontains $_.Id } | ForEach-Object Id)
+        $session.OfficeApp.Visible = $false
+        if ($App -eq 'Excel') {
+            $session.OfficeApp.DisplayAlerts = $false
+            $session.Docs = $session.OfficeApp.Workbooks
+        } else {
+            $session.OfficeApp.DisplayAlerts = 0
+            $session.Docs = $session.OfficeApp.Documents
+        }
+        if ($session.NewPids.Count -eq 1) {
+            $session.Watchdog = Start-Watchdog -ProcessId $session.NewPids[0] -State $session.State
+        } else {
+            Write-Host "WARN: could not identify the $App process; dialog watchdog disabled"
+        }
+    } catch {
+        $startError = $_
+        $session.State.Done = $true
+        Release-ComObject $session.Docs
+        try { $session.OfficeApp.Quit() } catch { }
+        Release-ComObject $session.OfficeApp
+        $session.OfficeApp = $null
+        $newPids = @(Get-Process -Name $processName -ErrorAction SilentlyContinue |
+                     Where-Object { $before -notcontains $_.Id } | ForEach-Object Id)
+        foreach ($leftover in $newPids) {
+            Stop-Process -Id $leftover -Force -ErrorAction SilentlyContinue
+        }
+        throw $startError
     }
     return $session
 }
@@ -356,6 +374,8 @@ if (-not $SkipAddIn -and $Office -ne 'Word') {
     $addInFailures = Invoke-AddInRun
     Write-Host "ADDIN: $addInFailures failures"
     $total += $addInFailures
+} elseif (-not $SkipAddIn) {
+    Write-Host 'ADDIN: skipped (Excel only)'
 }
 
 Write-Host "EXIT $total"

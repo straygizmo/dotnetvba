@@ -3,6 +3,8 @@
 DotNetVBA is a set of VBA class modules that let you write VBA with .NET API names: `File.Exists`, `Directory.GetFiles`, `Path.Combine`, `List` with 0-based indexing, and more. It wraps `Scripting.FileSystemObject`, `WScript.Shell`, `ADODB.Stream`, the Office `FileDialog` and a few Win32 calls behind one entry point, `Net`. It works in Excel, Word and Access (64-bit), needs no project references, and can be imported as source or used as an Excel add-in (`.xlam`).
 
 ```vb
+Dim path As String
+path = "C:\Temp\names.txt"
 If Net.File.Exists(path) Then
     Dim lines() As String
     lines = Net.File.ReadAllLines(path)
@@ -14,6 +16,7 @@ names.Add "a"
 names.Add "b"
 Debug.Print names.Count, names.Contains("a"), names(0)
 
+Dim n As Variant
 For Each n In names
     Debug.Print n
 Next
@@ -29,7 +32,7 @@ Next
 
 ## Installation
 
-**A. Add-in.** Download `DotNetVBA.xlam` from [Releases](https://github.com/straygizmo/dotnetvba/releases), put it in your add-ins folder and enable it. In your workbook's VBE, tick "DotNetVBA" under Tools > References.
+**A. Add-in.** Download `DotNetVBA.xlam` from [Releases](https://github.com/straygizmo/dotnetvba/releases). A downloaded file carries the Mark of the Web and Office blocks its macros, so right-click the file > Properties > tick **Unblock** > OK (or put it in a Trusted Location). Put it in your add-ins folder and enable it. In your workbook's VBE, tick "DotNetVBA" under Tools > References.
 
 **B. Source.** Import `src\*.bas` and `src\*.cls` into your own project (any host).
 
@@ -185,7 +188,7 @@ Items are `Variant` (values or objects). Index is 0-based; `Item` is the default
 - `IniFile` writes ANSI unless the file already exists as UTF-16 with BOM (Win32 behavior).
 
 **Behavior**
-- `Directory.SetCurrentDirectory` cannot target a UNC path (VBA `ChDir` limitation); it raises IOException.
+- `Directory.GetCurrentDirectory` / `SetCurrentDirectory` (and `Environment.CurrentDirectory`) use the wide Win32 calls, so Unicode folder names round-trip and `SetCurrentDirectory` accepts UNC paths.
 - `Directory.GetFiles` pattern `*.*` does not match extension-less names; use `*`.
 - `List` enumeration takes a snapshot when `For Each` starts, so changing the list inside the loop does not raise (unlike .NET). Do not mutate a list while enumerating it.
 - `Dialog.SaveFile` raises NotSupportedException in Access.
@@ -209,7 +212,9 @@ Items are `Variant` (values or objects). Index is 0-based; `Item` is the default
 pwsh -File tests\run-tests.ps1 [-Office Excel|Word|All] [-SkipAddIn]
 ```
 
-The runner drives real Excel and Word through COM, builds the add-in and tests it through a consumer workbook. It needs "Trust access to the VBA project object model" enabled in each host's Trust Center. The exit code is the number of failures. Interactive `Dialog` checks are listed in `tests\MANUAL.md`.
+The scripts require PowerShell 7 (`pwsh`); Windows PowerShell 5.1 is not supported.
+
+The runner drives real Excel and Word through COM, builds the add-in and tests it through a consumer workbook. It needs "Trust access to the VBA project object model" enabled in each host: File > Options > Trust Center > Trust Center Settings > Macro Settings > "Trust access to the VBA project object model". The exit code is the number of failures. Interactive `Dialog` checks are listed in `tests\MANUAL.md`.
 
 ## Building the add-in
 
@@ -217,7 +222,13 @@ The runner drives real Excel and Word through COM, builds the add-in and tests i
 pwsh -File build\build-xlam.ps1 [-OutputPath ...]
 ```
 
-This produces `dist\DotNetVBA.xlam` (VBA project name `DotNetVBA`) from `src\`. Excel must be installed.
+This produces `dist\DotNetVBA.xlam` (VBA project name `DotNetVBA`) from `src\`. Excel must be installed, with the same trust-access setting as the test runner.
+
+### Releasing
+
+1. Run the tests, then `pwsh -File build\build-xlam.ps1` to build `dist\DotNetVBA.xlam`.
+2. Tag the commit (`git tag -a vX.Y.Z`) and push the tag.
+3. Create the GitHub Release for that tag and attach `dist\DotNetVBA.xlam` as a release asset.
 
 ## License
 
@@ -231,12 +242,14 @@ DotNetVBA は、.NET の API 名 (`File.Exists`、`Directory.GetFiles`、`Path.C
 
 ### インストール
 
-- **A. アドイン**: [Releases](https://github.com/straygizmo/dotnetvba/releases) から `DotNetVBA.xlam` をダウンロードしてアドインフォルダに置き、有効化します。使用するブックの VBE で、ツール > 参照設定 の "DotNetVBA" にチェックを入れます。
+- **A. アドイン**: [Releases](https://github.com/straygizmo/dotnetvba/releases) から `DotNetVBA.xlam` をダウンロードします。ダウンロードしたファイルには Web のマーク (Mark of the Web) が付き、Office がマクロをブロックするため、ファイルを右クリック > プロパティ > **許可する** (Unblock) にチェック > OK とします (または信頼できる場所に置きます)。アドインフォルダに置き、有効化します。使用するブックの VBE で、ツール > 参照設定 の "DotNetVBA" にチェックを入れます。
 - **B. ソース**: `src\*.bas` と `src\*.cls` を自分のプロジェクトにインポートします。
 
 ### 使い方
 
 ```vb
+Dim path As String
+path = "C:\Temp\names.txt"
 If Net.File.Exists(path) Then
     Dim lines() As String
     lines = Net.File.ReadAllLines(path)
@@ -248,6 +261,7 @@ names.Add "a"
 names.Add "b"
 Debug.Print names.Count, names.Contains("a"), names(0)
 
+Dim n As Variant
 For Each n In names
     Debug.Print n
 Next

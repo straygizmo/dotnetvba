@@ -1,4 +1,4 @@
-*.cls text eol=crlf
-*.bas text eol=crlf
-*.ps1 text eol=crlf
+*.cls -text
+*.bas -text
+*.ps1 -text
 *.md text eol=lf
