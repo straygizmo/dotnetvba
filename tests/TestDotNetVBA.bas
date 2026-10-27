@@ -587,3 +587,20 @@ Public Sub Test_File_ErrorsAndInfo()
     AssertTrue Abs(Now - Net.File.GetLastAccessTime(jp)) < 1
     AssertEqual 0, Net.File.GetAttributes(jp) And 16                 ' not a directory bit
 End Sub
+
+Public Sub Test_File_LinesNewlineOnly()
+    Dim dir As String: dir = NewTempDir()
+    Dim p As String: p = dir & "\only-newlines.txt"
+    Dim r() As String
+    WriteTextRaw p, vbLf, "utf-8"
+    r = Net.File.ReadAllLines(p)
+    AssertEqual 0, UBound(r)
+    AssertEqual "", r(0)
+    WriteTextRaw p, vbCrLf & vbCrLf, "utf-8"
+    r = Net.File.ReadAllLines(p)
+    AssertEqual 1, UBound(r)
+    AssertEqual "", r(0)
+    AssertEqual "", r(1)
+    WriteTextRaw p, "", "utf-8"
+    AssertEqual -1, UBound(Net.File.ReadAllLines(p))
+End Sub

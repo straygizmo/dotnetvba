@@ -78,12 +78,18 @@ End Function
 
 Public Function ReadAllLines(ByVal path As String, Optional ByVal encoding As String = "utf-8") As String()
     Dim text As String
+    Dim oneEmptyLine(0 To 0) As String
     text = ReadTextCore(path, encoding, "ReadAllLines")
+    If Len(text) = 0 Then
+        ReadAllLines = EmptyStringArray()
+        Exit Function
+    End If
     text = Replace(text, vbCrLf, vbLf)
     text = Replace(text, vbCr, vbLf)
     If Right$(text, 1) = vbLf Then text = Left$(text, Len(text) - 1)
     If Len(text) = 0 Then
-        ReadAllLines = EmptyStringArray()
+        ' A lone newline is one empty line (Split("") would give no elements).
+        ReadAllLines = oneEmptyLine
     Else
         ReadAllLines = Split(text, vbLf)
     End If
