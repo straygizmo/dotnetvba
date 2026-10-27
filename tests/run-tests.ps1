@@ -1,4 +1,5 @@
-# Runs the DotNetVBA test suite: source lint, then import-mode runs in Excel and/or Word.
+# Runs the DotNetVBA test suite: source lint, import-mode runs in Excel and/or Word,
+# then the add-in boundary test (built .xlam referenced from a fresh workbook).
 # Exit code = number of failures (2 when VBA project access is not trusted).
 param(
     [ValidateSet('Excel', 'Word', 'All')][string]$Office = 'All',
@@ -126,38 +127,131 @@ function Start-Watchdog([int]$ProcessId, $State) {
     }
 }
 
+# Starts an invisible Office application with alerts off and the dialog
+# watchdog attached. Always pair with Stop-OfficeSession in a finally block.
+function Start-OfficeSession {
+    param([ValidateSet('Excel', 'Word')][string]$App)
+
+    $session = @{
+        App       = $App
+        OfficeApp = $null
+        Docs      = $null
+        Watchdog  = $null
+        NewPids   = @()
+        State     = [hashtable]::Synchronized(@{
+            Done    = $false
+            Dialogs = [System.Collections.ArrayList]::Synchronized([System.Collections.ArrayList]::new())
+        })
+    }
+    $processName = if ($App -eq 'Excel') { 'EXCEL' } else { 'WINWORD' }
+    $before = @(Get-Process -Name $processName -ErrorAction SilentlyContinue | ForEach-Object Id)
+    $session.OfficeApp = New-Object -ComObject "$App.Application"
+    $session.NewPids = @(Get-Process -Name $processName -ErrorAction SilentlyContinue |
+                         Where-Object { $before -notcontains $_.Id } | ForEach-Object Id)
+    $session.OfficeApp.Visible = $false
+    if ($App -eq 'Excel') {
+        $session.OfficeApp.DisplayAlerts = $false
+        $session.Docs = $session.OfficeApp.Workbooks
+    } else {
+        $session.OfficeApp.DisplayAlerts = 0
+        $session.Docs = $session.OfficeApp.Documents
+    }
+    if ($session.NewPids.Count -eq 1) {
+        $session.Watchdog = Start-Watchdog -ProcessId $session.NewPids[0] -State $session.State
+    } else {
+        Write-Host "WARN: could not identify the $App process; dialog watchdog disabled"
+    }
+    return $session
+}
+
+# Closes a document or workbook without saving and releases it; ignores a dead process.
+function Close-OfficeDocument($Session, $Doc) {
+    if ($null -eq $Doc) { return }
+    try {
+        if ($Session.App -eq 'Excel') { $Doc.Close($false) } else { $Doc.Close(0) }
+    } catch { }
+    Release-ComObject $Doc
+}
+
+# Quits the application, releases COM, stops the watchdog and kills the process
+# if it does not exit. Callers close and release their own objects first.
+function Stop-OfficeSession($Session) {
+    if ($null -eq $Session) { return }
+    Release-ComObject $Session.Docs
+    $Session.Docs = $null
+    if ($null -ne $Session.OfficeApp) {
+        try { $Session.OfficeApp.Quit() } catch { }
+        Release-ComObject $Session.OfficeApp
+        $Session.OfficeApp = $null
+    }
+    [GC]::Collect()
+    [GC]::WaitForPendingFinalizers()
+    $Session.State.Done = $true
+    if ($null -ne $Session.Watchdog) {
+        Wait-Job $Session.Watchdog -Timeout 10 | Out-Null
+        Remove-Job $Session.Watchdog -Force
+    }
+    foreach ($leftover in $Session.NewPids) {
+        $proc = Get-Process -Id $leftover -ErrorAction SilentlyContinue
+        if ($null -ne $proc -and -not $proc.WaitForExit(10000)) {
+            Write-Host "WARN: $($Session.App) process $leftover did not exit; killing it"
+            Stop-Process -Id $leftover -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+# Imports a module file; returns $null on success or the failure text.
+function Import-VbaFile($Components, $File) {
+    try {
+        $component = $Components.Import($File.FullName)
+        $importedName = $component.Name
+        Release-ComObject $component
+    } catch {
+        return "import of $($File.Name) failed: $($_.Exception.Message)"
+    }
+    if ($importedName -ne $File.BaseName) {
+        return "$($File.Name) imported as '$importedName' (check its Attribute VB_Name header)"
+    }
+    return $null
+}
+
+# Runs a test macro (trying each candidate name in turn) that writes a UTF-16
+# log, prints any dialog the watchdog closed and the log, and returns the
+# failure count (at least 1 when the macro could not run or a dialog appeared).
+function Invoke-LoggedMacro($Session, [string[]]$MacroNames, [string]$Log, [string]$Label) {
+    if (Test-Path $Log) { Remove-Item $Log }
+    $failures = $null
+    $lastError = $null
+    foreach ($macro in $MacroNames) {
+        try {
+            $failures = [int]$Session.OfficeApp.Run($macro, $Log)
+            break
+        } catch {
+            $lastError = $_.Exception.Message
+            # The watchdog killed the process; no other name can run.
+            if ($Session.State.Dialogs.Count -gt 0) { break }
+        }
+    }
+    if ($null -eq $failures) {
+        Write-Host "$Label FAIL: $($MacroNames[0]) could not run: $lastError"
+        $failures = 1
+    }
+    foreach ($text in $Session.State.Dialogs) {
+        Write-Host "$Label FAIL: dialog shown during run: $text"
+    }
+    if ($Session.State.Dialogs.Count -gt 0 -and $failures -eq 0) { $failures = 1 }
+    if (Test-Path $Log) { Get-Content $Log -Encoding Unicode | ForEach-Object { Write-Host $_ } }
+    return $failures
+}
+
 function Invoke-ImportModeRun {
     param([ValidateSet('Excel', 'Word')][string]$App)
 
     Write-Host "=== $App (import mode) ==="
-    $processName = if ($App -eq 'Excel') { 'EXCEL' } else { 'WINWORD' }
-    $officeApp = $null; $docs = $null; $doc = $null; $proj = $null; $components = $null
-    $watchdog = $null
-    $newPids = @()
-    $state = [hashtable]::Synchronized(@{
-        Done    = $false
-        Dialogs = [System.Collections.ArrayList]::Synchronized([System.Collections.ArrayList]::new())
-    })
-    $failures = 0
+    $session = $null; $doc = $null; $proj = $null; $components = $null
     try {
-        $before = @(Get-Process -Name $processName -ErrorAction SilentlyContinue | ForEach-Object Id)
-        $officeApp = New-Object -ComObject "$App.Application"
-        $officeApp.Visible = $false
-        if ($App -eq 'Excel') {
-            $officeApp.DisplayAlerts = $false
-            $docs = $officeApp.Workbooks
-        } else {
-            $officeApp.DisplayAlerts = 0
-            $docs = $officeApp.Documents
-        }
-        $newPids = @(Get-Process -Name $processName -ErrorAction SilentlyContinue |
-                     Where-Object { $before -notcontains $_.Id } | ForEach-Object Id)
-        if ($newPids.Count -eq 1) {
-            $watchdog = Start-Watchdog -ProcessId $newPids[0] -State $state
-        } else {
-            Write-Host "WARN: could not identify the $App process; dialog watchdog disabled"
-        }
-        $doc = $docs.Add()
+        $session = Start-OfficeSession -App $App
+        $doc = $session.Docs.Add()
 
         try {
             $proj = $doc.VBProject
@@ -171,70 +265,82 @@ function Invoke-ImportModeRun {
                  @(Get-ChildItem -Path (Join-Path $srcDir '*.cls') -File) +
                  @(Get-Item (Join-Path $testsDir 'TestDotNetVBA.bas'))
         foreach ($p in $paths) {
-            try {
-                $component = $components.Import($p.FullName)
-                $importedName = $component.Name
-                Release-ComObject $component
-            } catch {
-                Write-Host "$App FAIL: import of $($p.Name) failed: $($_.Exception.Message)"
-                return 1
-            }
-            if ($importedName -ne $p.BaseName) {
-                Write-Host "$App FAIL: $($p.Name) imported as '$importedName' (check its Attribute VB_Name header)"
+            $problem = Import-VbaFile $components $p
+            if ($null -ne $problem) {
+                Write-Host "$App FAIL: $problem"
                 return 1
             }
         }
 
         $log = Join-Path $env:TEMP "dotnetvba-$App.log"
-        if (Test-Path $log) { Remove-Item $log }
-        try {
-            $failures = [int]$officeApp.Run('RunAllTests', $log)
-        } catch {
-            Write-Host "$App FAIL: RunAllTests could not run: $($_.Exception.Message)"
-            $failures = 1
-        }
-        foreach ($text in $state.Dialogs) {
-            Write-Host "$App FAIL: dialog shown during run: $text"
-        }
-        if ($state.Dialogs.Count -gt 0 -and $failures -eq 0) { $failures = 1 }
-        # RunAllTests writes the log as UTF-16.
-        if (Test-Path $log) { Get-Content $log -Encoding Unicode | ForEach-Object { Write-Host $_ } }
+        return Invoke-LoggedMacro $session @('RunAllTests') $log $App
     } finally {
-        if ($null -ne $doc) {
-            try {
-                if ($App -eq 'Excel') { $doc.Close($false) } else { $doc.Close(0) }
-            } catch { }
-        }
         Release-ComObject $components
         Release-ComObject $proj
-        Release-ComObject $doc
-        Release-ComObject $docs
-        if ($null -ne $officeApp) {
-            try { $officeApp.Quit() } catch { }
-            Release-ComObject $officeApp
-        }
-        $components = $null; $proj = $null; $doc = $null; $docs = $null; $officeApp = $null
-        [GC]::Collect()
-        [GC]::WaitForPendingFinalizers()
-        $state.Done = $true
-        if ($null -ne $watchdog) {
-            Wait-Job $watchdog -Timeout 10 | Out-Null
-            Remove-Job $watchdog -Force
-        }
-        foreach ($leftover in $newPids) {
-            $proc = Get-Process -Id $leftover -ErrorAction SilentlyContinue
-            if ($null -ne $proc -and -not $proc.WaitForExit(10000)) {
-                Write-Host "WARN: $App process $leftover did not exit; killing it"
-                Stop-Process -Id $leftover -Force -ErrorAction SilentlyContinue
-            }
-        }
+        if ($null -ne $session) { Close-OfficeDocument $session $doc }
+        $components = $null; $proj = $null; $doc = $null
+        Stop-OfficeSession $session
     }
-    return $failures
 }
 
+# Builds the add-in to a temp folder, references it from a fresh workbook and
+# runs TestAddInConsumer there, so the public API is exercised across the
+# project boundary. Returns the failure count.
 function Invoke-AddInRun {
-    Write-Host 'ADDIN: skipped (not built yet)'
-    return 0
+    Write-Host '=== Excel (add-in) ==='
+    $testDir = Join-Path $env:TEMP 'dotnetvba-test'
+    $xlam = Join-Path $testDir 'DotNetVBA.xlam'
+    $buildScript = Join-Path $repoRoot 'build\build-xlam.ps1'
+    try {
+        & $buildScript -OutputPath $xlam
+        $buildExit = $LASTEXITCODE
+    } catch {
+        Write-Host "ADDIN FAIL: build-xlam.ps1 threw: $($_.Exception.Message)"
+        return 1
+    }
+    if ($buildExit -ne 0 -or -not (Test-Path $xlam)) {
+        Write-Host "ADDIN FAIL: build-xlam.ps1 failed (exit $buildExit)"
+        return 1
+    }
+
+    $session = $null; $addIn = $null; $wb = $null; $proj = $null; $components = $null; $refs = $null; $ref = $null
+    try {
+        $session = Start-OfficeSession -App 'Excel'
+        try {
+            $addIn = $session.Docs.Open($xlam)
+            $wb = $session.Docs.Add()
+            $proj = $wb.VBProject
+            $components = $proj.VBComponents
+            $refs = $proj.References
+            $ref = $refs.AddFromFile($xlam)
+        } catch {
+            Write-Host "ADDIN FAIL: could not open or reference the add-in: $($_.Exception.Message)"
+            foreach ($text in $session.State.Dialogs) { Write-Host "ADDIN FAIL: dialog shown: $text" }
+            return 1
+        }
+
+        $problem = Import-VbaFile $components (Get-Item (Join-Path $testsDir 'TestAddInConsumer.bas'))
+        if ($null -ne $problem) {
+            Write-Host "ADDIN FAIL: $problem"
+            return 1
+        }
+
+        $log = Join-Path $testDir 'dotnetvba-addin.log'
+        $qualified = "'" + $wb.Name + "'!RunAddInConsumerTest"
+        return Invoke-LoggedMacro $session @('RunAddInConsumerTest', $qualified) $log 'ADDIN'
+    } finally {
+        Release-ComObject $ref
+        Release-ComObject $refs
+        Release-ComObject $components
+        Release-ComObject $proj
+        $ref = $null; $refs = $null; $components = $null; $proj = $null
+        if ($null -ne $session) {
+            Close-OfficeDocument $session $wb
+            Close-OfficeDocument $session $addIn
+        }
+        $wb = $null; $addIn = $null
+        Stop-OfficeSession $session
+    }
 }
 
 $total = Invoke-Lint
@@ -247,7 +353,9 @@ foreach ($h in $hosts) {
 }
 
 if (-not $SkipAddIn -and $Office -ne 'Word') {
-    $total += Invoke-AddInRun
+    $addInFailures = Invoke-AddInRun
+    Write-Host "ADDIN: $addInFailures failures"
+    $total += $addInFailures
 }
 
 Write-Host "EXIT $total"

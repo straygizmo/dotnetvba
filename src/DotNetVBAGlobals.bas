@@ -1,10 +1,10 @@
 Attribute VB_Name = "DotNetVBAGlobals"
 Option Explicit
 
-Private mInstance As DotNetVBA
+Private mInstance As DotNet
 
-' Returns the shared DotNetVBA facade, creating it on first call.
-Public Function Net() As DotNetVBA
-    If mInstance Is Nothing Then Set mInstance = New DotNetVBA
+' Returns the shared DotNet facade, creating it on first call.
+Public Function Net() As DotNet
+    If mInstance Is Nothing Then Set mInstance = New DotNet
     Set Net = mInstance
 End Function
