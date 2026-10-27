@@ -393,3 +393,79 @@ Public Sub Test_Harness_TempDirAndBytes()
     AssertEqual 2, UBound(r)
     AssertEqual 67, r(2)
 End Sub
+
+Public Sub Test_Directory_CreateExistsDelete()
+    Dim dir As String: dir = NewTempDir()
+    AssertFalse Net.Directory.Exists("")
+    AssertTrue Net.Directory.Exists(dir)
+    AssertTrue Net.Directory.Exists(dir & "\")                       ' trailing backslash
+    Net.Directory.CreateDirectory dir & "\a\b\c"                     ' recursive create
+    AssertTrue Net.Directory.Exists(dir & "\a\b\c")
+    Net.Directory.CreateDirectory dir & "\a\b\c"                     ' no error if exists
+    Net.Directory.Delete dir & "\a\b\c"                              ' empty, non-recursive OK
+    AssertFalse Net.Directory.Exists(dir & "\a\b\c")
+    On Error Resume Next
+    Net.Directory.Delete dir & "\a"                                  ' non-empty
+    AssertRaised vbObjectError + 1005
+    Net.Directory.Delete dir & "\missing"
+    AssertRaised vbObjectError + 1004
+    On Error GoTo 0
+    Net.Directory.Delete dir & "\a", True
+    AssertFalse Net.Directory.Exists(dir & "\a")
+End Sub
+
+Public Sub Test_Directory_NonAsciiNames()
+    Dim dir As String: dir = NewTempDir()
+    Dim jp As String: jp = dir & "\" & ChrW(&H3042) & ChrW(&H3044)
+    Net.Directory.CreateDirectory jp
+    AssertTrue Net.Directory.Exists(jp)
+    Dim dirs() As String: dirs = Net.Directory.GetDirectories(dir)
+    AssertEqual 0, UBound(dirs)
+    AssertEqual jp, dirs(0)
+End Sub
+
+Public Sub Test_Directory_GetFilesAndDirectories()
+    Dim dir As String: dir = NewTempDir()
+    Dim fso As Object: Set fso = NewFso()
+    fso.CreateTextFile(dir & "\a.txt").Close
+    fso.CreateTextFile(dir & "\b.log").Close
+    fso.CreateFolder dir & "\sub"
+    fso.CreateTextFile(dir & "\sub\c.txt").Close
+    Dim r() As String
+    r = Net.Directory.GetFiles(dir)
+    AssertEqual 1, UBound(r)                                         ' full paths, non-recursive
+    AssertEqual dir & "\a.txt", r(0)
+    r = Net.Directory.GetFiles(dir, "*.txt")
+    AssertEqual 0, UBound(r)
+    r = Net.Directory.GetFiles(dir, "*.TXT", True)                   ' case-insensitive, recursive
+    AssertEqual 1, UBound(r)
+    AssertEqual dir & "\sub\c.txt", r(1)
+    r = Net.Directory.GetFiles(dir, "?.log")
+    AssertEqual 0, UBound(r)
+    r = Net.Directory.GetFiles(dir, "*.none")
+    AssertEqual -1, UBound(r)                                        ' empty array, not error
+    r = Net.Directory.GetDirectories(dir)
+    AssertEqual dir & "\sub", r(0)
+    r = Net.Directory.GetFiles(dir & "\")                            ' trailing backslash: no double separator
+    AssertEqual dir & "\a.txt", r(0)
+    On Error Resume Next
+    r = Net.Directory.GetFiles(dir & "\missing")
+    AssertRaised vbObjectError + 1004
+    On Error GoTo 0
+End Sub
+
+Public Sub Test_Directory_MoveParentCurrent()
+    Dim dir As String: dir = NewTempDir()
+    Net.Directory.CreateDirectory dir & "\src"
+    Net.Directory.Move dir & "\src", dir & "\dst"
+    AssertTrue Net.Directory.Exists(dir & "\dst")
+    AssertFalse Net.Directory.Exists(dir & "\src")
+    AssertEqual dir, Net.Directory.GetParent(dir & "\dst")
+    AssertEqual "", Net.Directory.GetParent("C:\")
+    Dim saved As String: saved = Net.Directory.GetCurrentDirectory()
+    Net.Directory.SetCurrentDirectory dir
+    AssertEqual dir, Net.Directory.GetCurrentDirectory()
+    Net.Directory.SetCurrentDirectory saved
+    AssertTrue Abs(Now - Net.Directory.GetLastWriteTime(dir & "\dst")) < 1 / 24
+    AssertTrue Abs(Now - Net.Directory.GetCreationTime(dir & "\dst")) < 1 / 24
+End Sub

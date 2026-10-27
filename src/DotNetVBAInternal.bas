@@ -47,3 +47,12 @@ Public Function ExceptionName(ByVal errNumber As DotNetErrorNumber) As String
             ExceptionName = "Exception"
     End Select
 End Function
+
+Public Function WildcardToLike(ByVal pattern As String) As String
+    pattern = Replace(pattern, "[", "[[]")
+    WildcardToLike = Replace(pattern, "#", "[#]")
+End Function
+
+Public Function MatchesPattern(ByVal nameText As String, ByVal pattern As String) As Boolean
+    MatchesPattern = LCase$(nameText) Like LCase$(WildcardToLike(pattern))
+End Function

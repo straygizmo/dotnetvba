@@ -13,6 +13,7 @@ Option Explicit
 
 Private Const VERSION_STRING As String = "1.0.0"
 Private mPath As DotNetPath
+Private mDirectory As DotNetDirectory
 
 Public Property Get Version() As String
     Version = VERSION_STRING
@@ -21,4 +22,9 @@ End Property
 Public Property Get Path() As DotNetPath
     If mPath Is Nothing Then Set mPath = New DotNetPath
     Set Path = mPath
+End Property
+
+Public Property Get Directory() As DotNetDirectory
+    If mDirectory Is Nothing Then Set mDirectory = New DotNetDirectory
+    Set Directory = mDirectory
 End Property
