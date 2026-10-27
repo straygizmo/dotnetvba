@@ -48,12 +48,16 @@ End Function
 
 Public Sub WriteString(ByVal path As String, ByVal section As String, ByVal keyName As String, ByVal value As String)
     Dim full As String
+    Dim apiResult As Long
     On Error GoTo Fail
     full = ResolvePath(path, "DotNetIniFile.WriteString")
     RequireName section, "section", "DotNetIniFile.WriteString"
     RequireName keyName, "keyName", "DotNetIniFile.WriteString"
     RequireParent full, "DotNetIniFile.WriteString"
-    CheckWrite WritePrivateProfileStringW(StrPtr(section), StrPtr(keyName), StrPtr(value), StrPtr(full))
+    ' A NULL lpString would delete the key, so force a real empty string.
+    If StrPtr(value) = 0 Then value = ""
+    apiResult = WritePrivateProfileStringW(StrPtr(section), StrPtr(keyName), StrPtr(value), StrPtr(full))
+    CheckWrite apiResult, "DotNetIniFile.WriteString"
     Exit Sub
 Fail:
     Rethrow "DotNetIniFile.WriteString"
@@ -62,12 +66,14 @@ End Sub
 Public Sub DeleteKey(ByVal path As String, ByVal section As String, ByVal keyName As String)
     Dim full As String
     Dim nullPtr As LongPtr
+    Dim apiResult As Long
     On Error GoTo Fail
     full = ResolvePath(path, "DotNetIniFile.DeleteKey")
     RequireName section, "section", "DotNetIniFile.DeleteKey"
     RequireName keyName, "keyName", "DotNetIniFile.DeleteKey"
     RequireParent full, "DotNetIniFile.DeleteKey"
-    CheckWrite WritePrivateProfileStringW(StrPtr(section), StrPtr(keyName), nullPtr, StrPtr(full))
+    apiResult = WritePrivateProfileStringW(StrPtr(section), StrPtr(keyName), nullPtr, StrPtr(full))
+    CheckWrite apiResult, "DotNetIniFile.DeleteKey"
     Exit Sub
 Fail:
     Rethrow "DotNetIniFile.DeleteKey"
@@ -76,11 +82,13 @@ End Sub
 Public Sub DeleteSection(ByVal path As String, ByVal section As String)
     Dim full As String
     Dim nullPtr As LongPtr
+    Dim apiResult As Long
     On Error GoTo Fail
     full = ResolvePath(path, "DotNetIniFile.DeleteSection")
     RequireName section, "section", "DotNetIniFile.DeleteSection"
     RequireParent full, "DotNetIniFile.DeleteSection"
-    CheckWrite WritePrivateProfileStringW(StrPtr(section), nullPtr, nullPtr, StrPtr(full))
+    apiResult = WritePrivateProfileStringW(StrPtr(section), nullPtr, nullPtr, StrPtr(full))
+    CheckWrite apiResult, "DotNetIniFile.DeleteSection"
     Exit Sub
 Fail:
     Rethrow "DotNetIniFile.DeleteSection"
@@ -156,11 +164,11 @@ Private Sub RequireParent(ByVal full As String, ByVal source As String)
     End If
 End Sub
 
-Private Sub CheckWrite(ByVal apiResult As Long)
+Private Sub CheckWrite(ByVal apiResult As Long, ByVal source As String)
     Dim lastErr As Long
     lastErr = Err.LastDllError
     If apiResult = 0 Then
-        ThrowDotNet DotNetIO, "DotNetIniFile", "WritePrivateProfileString failed (error " & CStr(lastErr) & ")."
+        ThrowDotNet DotNetIO, source, "WritePrivateProfileString failed (error " & CStr(lastErr) & ")."
     End If
 End Sub
 

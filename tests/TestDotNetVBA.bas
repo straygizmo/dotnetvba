@@ -789,3 +789,16 @@ Public Sub Test_IniFile_RelativePathIsResolved()
     AssertTrue Net.File.Exists(dir & "\rel.ini"), "relative path must resolve against the current directory, not the Windows folder"
     Net.Directory.SetCurrentDirectory saved
 End Sub
+
+Public Sub Test_IniFile_NullStringWritesEmptyValue()
+    Dim p As String: p = NewTempDir() & "\n.ini"
+    Dim emptyVar As String
+    Net.IniFile.WriteString p, "S", "k", "v"
+    Net.IniFile.WriteString p, "S", "k", emptyVar
+    AssertArrayEqual Split("k", ","), Net.IniFile.GetKeys(p, "S")
+    AssertEqual "", Net.IniFile.ReadString(p, "S", "k", "dflt")
+    Net.IniFile.WriteString p, "S", "k", "v"
+    Net.IniFile.WriteString p, "S", "k", vbNullString
+    AssertArrayEqual Split("k", ","), Net.IniFile.GetKeys(p, "S")
+    AssertEqual "", Net.IniFile.ReadString(p, "S", "k", "dflt")
+End Sub
