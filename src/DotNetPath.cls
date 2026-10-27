@@ -121,15 +121,12 @@ End Function
 Public Function GetTempFileName() As String
     Dim fso As Object
     Dim fullName As String
-    Dim fileNum As Long
     Set fso = NewFso()
     Do
         fullName = GetTempPath() & fso.GetTempName()
     Loop While fso.FileExists(fullName)
     On Error GoTo Failed
-    fileNum = FreeFile
-    Open fullName For Output As #fileNum
-    Close #fileNum
+    fso.CreateTextFile(fullName, False).Close
     GetTempFileName = fullName
     Exit Function
 Failed:

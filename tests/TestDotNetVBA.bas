@@ -287,7 +287,7 @@ Public Function ReadBytes(ByVal path As String) As Byte()
     data = stm.Read(-1)                ' adReadAll
     stm.Close
     If IsNull(data) Then
-        ReDim empty0(0 To -1)          ' empty file: Read returns Null
+        empty0 = ""                         ' empty file: Read returns Null; "" gives UBound -1
         ReadBytes = empty0
     Else
         ReadBytes = data
@@ -481,6 +481,33 @@ Public Sub Test_Directory_SetCurrentDirectoryRelative()
     AssertEqual dir & "\sub", after
 End Sub
 
+Public Sub Test_Directory_SetCurrentDirectoryAbsoluteRelativeMissing()
+    Dim dir As String: dir = NewTempDir()
+    Net.Directory.CreateDirectory dir & "\a\b"
+    Dim saved As String: saved = Net.Directory.GetCurrentDirectory()
+    Dim absGot As String, relGot As String, upGot As String, afterMissing As String
+    Dim missingErr As Long
+    Net.Directory.SetCurrentDirectory dir & "\a\"                    ' absolute, trailing separator
+    absGot = Net.Directory.GetCurrentDirectory()
+    Net.Directory.SetCurrentDirectory "b"                            ' relative
+    relGot = Net.Directory.GetCurrentDirectory()
+    Net.Directory.SetCurrentDirectory "..\.."                        ' relative with ..
+    upGot = Net.Directory.GetCurrentDirectory()
+    On Error Resume Next
+    Net.Directory.SetCurrentDirectory "missing"
+    missingErr = Err.Number
+    Err.Clear
+    On Error GoTo 0
+    afterMissing = Net.Directory.GetCurrentDirectory()
+    Net.Directory.SetCurrentDirectory saved
+    AssertEqual saved, Net.Directory.GetCurrentDirectory()
+    AssertEqual dir & "\a", absGot
+    AssertEqual dir & "\a\b", relGot
+    AssertEqual dir, upGot
+    AssertEqual vbObjectError + 1004, missingErr
+    AssertEqual dir, afterMissing                                    ' failure leaves the directory unchanged
+End Sub
+
 Public Sub Test_File_ExistsCopyMoveDelete()
     Dim dir As String: dir = NewTempDir()
     Dim p As String: p = dir & "\a.txt"
@@ -547,8 +574,12 @@ Public Sub Test_File_Lines()
     AssertArrayEqual want, Net.File.ReadAllLines(p)
     WriteTextRaw p, "a" & vbCr & vbCr & "c" & vbCr, "utf-8"          ' CR
     AssertArrayEqual want, Net.File.ReadAllLines(p)
+    Dim noBytes() As Byte: noBytes = ""                              ' empty Byte array (UBound -1)
+    WriteBytes p, noBytes
+    AssertEqual 0, Net.File.GetLength(p)
+    AssertEqual -1, UBound(Net.File.ReadAllLines(p))                 ' true 0-byte file
     WriteTextRaw p, "", "utf-8"
-    AssertEqual -1, UBound(Net.File.ReadAllLines(p))                 ' empty file
+    AssertEqual -1, UBound(Net.File.ReadAllLines(p))                 ' BOM-only file
     Net.File.AppendAllText p, "x"
     Net.File.AppendAllText p, "y"
     AssertEqual "xy", Net.File.ReadAllText(p)
@@ -601,8 +632,12 @@ Public Sub Test_File_LinesNewlineOnly()
     AssertEqual 1, UBound(r)
     AssertEqual "", r(0)
     AssertEqual "", r(1)
+    Dim noBytes() As Byte: noBytes = ""                              ' empty Byte array (UBound -1)
+    WriteBytes p, noBytes
+    AssertEqual 0, Net.File.GetLength(p)
+    AssertEqual -1, UBound(Net.File.ReadAllLines(p))                 ' true 0-byte file
     WriteTextRaw p, "", "utf-8"
-    AssertEqual -1, UBound(Net.File.ReadAllLines(p))
+    AssertEqual -1, UBound(Net.File.ReadAllLines(p))                 ' BOM-only file
 End Sub
 
 Public Sub Test_Environment_Folders()
@@ -634,6 +669,82 @@ Public Sub Test_Environment_Misc()
     Net.Environment.CurrentDirectory = dir
     AssertEqual dir, Net.Environment.CurrentDirectory
     Net.Environment.CurrentDirectory = saved
+End Sub
+
+' Hangul is outside both code page 932 and 1252, so any ANSI round-trip turns it into "?".
+Public Sub Test_Unicode_OutsideAnsiCodePage()
+    Dim k As String: k = ChrW(&HAC00)
+    Dim dir As String: dir = NewTempDir()
+    Dim u As String: u = dir & "\" & k
+    Net.Directory.CreateDirectory u
+    Dim saved As String: saved = Net.Directory.GetCurrentDirectory()
+    Dim absGot As String, envGot As String, relGot As String, fullGot As String
+    Net.Directory.SetCurrentDirectory u
+    absGot = Net.Directory.GetCurrentDirectory()
+    envGot = Net.Environment.CurrentDirectory
+    Net.Directory.SetCurrentDirectory dir
+    Net.Directory.SetCurrentDirectory k                              ' relative Unicode name
+    relGot = Net.Directory.GetCurrentDirectory()
+    fullGot = Net.Path.GetFullPath("x.txt")
+    Net.Directory.SetCurrentDirectory saved
+    AssertEqual saved, Net.Directory.GetCurrentDirectory()
+    AssertEqual u, absGot
+    AssertEqual u, envGot
+    AssertEqual u, relGot
+    AssertEqual u & "\x.txt", fullGot
+    Dim t As String: t = Net.Path.GetTempFileName()
+    AssertTrue Net.File.Exists(t)
+    AssertEqual 0, Net.File.GetLength(t)
+    Net.File.Delete t
+    ' GetEnvironmentVariable reads the process environment as UTF-16.
+    Dim procEnv As Object: Set procEnv = CreateObject("WScript.Shell").Environment("Process")
+    procEnv("DOTNETVBA_UNICODE_TEST") = "x" & k
+    Dim envValue As String: envValue = Net.Environment.GetEnvironmentVariable("DOTNETVBA_UNICODE_TEST")
+    procEnv.Remove "DOTNETVBA_UNICODE_TEST"
+    AssertEqual "x" & k, envValue
+    AssertEqual "", Net.Environment.GetEnvironmentVariable("DOTNETVBA_UNICODE_TEST")
+End Sub
+
+Public Sub Test_Unicode_FileAndDirectoryWalk()
+    Dim k As String: k = ChrW(&HAC00)
+    Dim dir As String: dir = NewTempDir()
+    Dim d As String: d = dir & "\" & k & "d"
+    Net.Directory.CreateDirectory d
+    Dim f As String: f = d & "\" & k & ".txt"
+    Net.File.WriteAllText f, "a" & k & vbCrLf & "b"
+    AssertTrue Net.File.Exists(f)
+    AssertEqual "a" & k & vbCrLf & "b", Net.File.ReadAllText(f)
+    Dim want(0 To 1) As String: want(0) = "a" & k: want(1) = "b"
+    AssertArrayEqual want, Net.File.ReadAllLines(f)
+    Dim f2 As String: f2 = d & "\" & k & "2.txt"
+    Dim f3 As String: f3 = d & "\" & k & "3.txt"
+    Net.File.Copy f, f2
+    AssertEqual "a" & k & vbCrLf & "b", Net.File.ReadAllText(f2)
+    Net.File.Move f2, f3
+    AssertFalse Net.File.Exists(f2)
+    AssertTrue Net.File.Exists(f3)
+    Dim r() As String
+    r = Net.Directory.GetFiles(d, k & ".txt")
+    AssertEqual 0, UBound(r)
+    AssertEqual f, r(0)
+    r = Net.Directory.GetFiles(d)
+    AssertEqual 1, UBound(r)
+    Net.File.Delete f3
+    AssertFalse Net.File.Exists(f3)
+    Dim ini As String: ini = d & "\" & k & ".ini"
+    Net.IniFile.WriteString ini, "S", "k", "v1"
+    AssertTrue Net.File.Exists(ini)
+    AssertEqual "v1", Net.IniFile.ReadString(ini, "S", "k")
+    Dim moved As String: moved = dir & "\" & k & "moved"
+    Net.Directory.Move d, moved
+    AssertFalse Net.Directory.Exists(d)
+    AssertTrue Net.Directory.Exists(moved)
+    r = Net.Directory.GetFiles(moved, "*.txt")
+    AssertEqual 0, UBound(r)
+    AssertEqual moved & "\" & k & ".txt", r(0)
+    AssertEqual "v1", Net.IniFile.ReadString(moved & "\" & k & ".ini", "S", "k")
+    Net.Directory.Delete moved, True
+    AssertFalse Net.Directory.Exists(moved)
 End Sub
 
 Public Sub Test_List_AddItemCount()

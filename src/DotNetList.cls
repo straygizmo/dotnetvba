@@ -116,6 +116,7 @@ End Sub
 Public Sub Clear()
     ReDim mItems(0 To UBound(mItems))
     mCount = 0
+    Set mEnumItems = Nothing
     mEnumStale = True
 End Sub
 

@@ -11,6 +11,10 @@ Option Explicit
 
 ' System.IO.Directory. Obtain it with Net.Directory.
 
+' Wide-character Win32 calls: CurDir$/ChDir go through the ANSI code page.
+Private Declare PtrSafe Function GetCurrentDirectoryW Lib "kernel32" (ByVal nBufferLength As Long, ByVal lpBuffer As LongPtr) As Long
+Private Declare PtrSafe Function SetCurrentDirectoryW Lib "kernel32" (ByVal lpPathName As LongPtr) As Long
+
 Private mPathHelper As DotNetPath
 
 Public Function Exists(ByVal path As String) As Boolean
@@ -85,7 +89,20 @@ Public Function GetParent(ByVal path As String) As String
 End Function
 
 Public Function GetCurrentDirectory() As String
-    GetCurrentDirectory = CurDir$()
+    Dim buf As String
+    Dim size As Long
+    Dim ret As Long
+    size = 32767
+    Do
+        buf = String$(size, vbNullChar)
+        ret = GetCurrentDirectoryW(size, StrPtr(buf))
+        If ret = 0 Then
+            ThrowDotNet DotNetIO, "DotNetDirectory.GetCurrentDirectory", "GetCurrentDirectoryW failed (error " & CStr(Err.LastDllError) & ")."
+        End If
+        If ret < size Then Exit Do
+        size = ret + 1
+    Loop
+    GetCurrentDirectory = Left$(buf, ret)
 End Function
 
 Public Sub SetCurrentDirectory(ByVal path As String)
@@ -96,8 +113,9 @@ Public Sub SetCurrentDirectory(ByVal path As String)
     If Not NewFso().FolderExists(target) Then
         ThrowDotNet DotNetDirectoryNotFound, "DotNetDirectory.SetCurrentDirectory", "Could not find a part of the path '" & path & "'."
     End If
-    If Mid$(target, 2, 1) = ":" Then ChDrive Left$(target, 1)
-    ChDir target
+    If SetCurrentDirectoryW(StrPtr(target)) = 0 Then
+        ThrowDotNet DotNetIO, "DotNetDirectory.SetCurrentDirectory", "Could not set the current directory to '" & path & "' (error " & CStr(Err.LastDllError) & ")."
+    End If
     Exit Sub
 Fail:
     Rethrow "DotNetDirectory.SetCurrentDirectory"

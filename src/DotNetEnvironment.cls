@@ -11,6 +11,9 @@ Option Explicit
 
 ' System.Environment. Obtain it with Net.Environment.
 
+' Wide-character Win32 call: Environ$ goes through the ANSI code page.
+Private Declare PtrSafe Function GetEnvironmentVariableW Lib "kernel32" (ByVal lpName As LongPtr, ByVal lpBuffer As LongPtr, ByVal nSize As Long) As Long
+
 Public Enum SpecialFolder
     SpecialFolder_Desktop
     SpecialFolder_MyDocuments
@@ -69,11 +72,11 @@ Public Property Get NewLine() As String
 End Property
 
 Public Property Get UserName() As String
-    UserName = Environ$("USERNAME")
+    UserName = GetEnvironmentVariable("USERNAME")
 End Property
 
 Public Property Get MachineName() As String
-    MachineName = Environ$("COMPUTERNAME")
+    MachineName = GetEnvironmentVariable("COMPUTERNAME")
 End Property
 
 Public Property Get CurrentDirectory() As String
@@ -89,7 +92,7 @@ Public Function GetEnvironmentVariable(ByVal variableName As String) As String
     If Len(variableName) = 0 Then
         ThrowDotNet DotNetArgument, "DotNetEnvironment.GetEnvironmentVariable", "The variable name is empty. (Parameter 'variable')"
     End If
-    GetEnvironmentVariable = Environ$(variableName)
+    GetEnvironmentVariable = ReadVariable(variableName)
 End Function
 
 ' Unknown %NAME% tokens are left untouched.
@@ -107,6 +110,22 @@ Public Property Get Is64BitProcess() As Boolean
 End Property
 
 ' ----- helpers -----
+
+' Returns "" when the variable is not set (or is set to an empty value).
+Private Function ReadVariable(ByVal variableName As String) As String
+    Dim buf As String
+    Dim size As Long
+    Dim ret As Long
+    size = 1024
+    Do
+        buf = String$(size, vbNullChar)
+        ret = GetEnvironmentVariableW(StrPtr(variableName), StrPtr(buf), size)
+        If ret = 0 Then Exit Function
+        If ret < size Then Exit Do
+        size = ret
+    Loop
+    ReadVariable = Left$(buf, ret)
+End Function
 
 Private Function ShellFolder(ByVal folderName As String) As String
     ShellFolder = CStr(CreateObject("WScript.Shell").SpecialFolders(folderName))
