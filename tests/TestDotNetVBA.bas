@@ -635,3 +635,120 @@ Public Sub Test_Environment_Misc()
     AssertEqual dir, Net.Environment.CurrentDirectory
     Net.Environment.CurrentDirectory = saved
 End Sub
+
+Public Sub Test_List_AddItemCount()
+    Dim l As DotNetList: Set l = Net.NewList()
+    AssertEqual 0, l.Count
+    l.Add "a": l.Add 2: l.Add 3.5
+    AssertEqual 3, l.Count
+    AssertEqual "a", l(0)                                            ' default member
+    AssertEqual 2, l.Item(1)
+    l(1) = 20
+    AssertEqual 20, l(1)
+    Dim o As Object: Set o = Net.NewList()
+    Set l(2) = o
+    AssertTrue l(2) Is o
+    On Error Resume Next
+    Dim v As Variant: v = l(3)
+    AssertRaised vbObjectError + 1002
+    v = l(-1)
+    AssertRaised vbObjectError + 1002
+    On Error GoTo 0
+End Sub
+
+Public Sub Test_List_InsertRemove()
+    Dim l As DotNetList: Set l = Net.NewList()
+    l.Add "b": l.Insert 0, "a": l.Insert 2, "c"                      ' insert at Count appends
+    AssertEqual "a,b,c", l.Join()
+    l.RemoveAt 1
+    AssertEqual "a,c", l.Join()
+    AssertTrue l.Remove("c")
+    AssertFalse l.Remove("zzz")
+    AssertEqual "a", l.Join()
+    Dim arr(0 To 2) As Variant: arr(0) = 1: arr(1) = 2: arr(2) = 3
+    l.AddRange arr
+    AssertEqual "a,1,2,3", l.Join()
+    l.RemoveRange 1, 2
+    AssertEqual "a,3", l.Join()
+    Dim other As DotNetList: Set other = Net.NewList()
+    other.Add "x": other.Add "y"
+    l.AddRange other
+    AssertEqual "a|3|x|y", l.Join("|")
+    l.Clear
+    AssertEqual 0, l.Count
+    On Error Resume Next
+    l.Insert 1, "q"
+    AssertRaised vbObjectError + 1002
+    l.RemoveAt 0
+    AssertRaised vbObjectError + 1002
+    On Error GoTo 0
+End Sub
+
+Public Sub Test_List_Search()
+    Dim l As DotNetList: Set l = Net.NewList()
+    Dim o As Object: Set o = Net.NewList()
+    l.Add "a": l.Add o: l.Add "a": l.Add 5
+    AssertTrue l.Contains("a")
+    AssertTrue l.Contains(o)
+    AssertFalse l.Contains("5")                                      ' string "5" <> number 5
+    AssertTrue l.Contains(5)
+    AssertEqual 0, l.IndexOf("a")
+    AssertEqual 2, l.LastIndexOf("a")
+    AssertEqual 1, l.IndexOf(o)
+    AssertEqual -1, l.IndexOf("none")
+    AssertTrue l.Remove(o)
+    AssertEqual 3, l.Count
+End Sub
+
+Public Sub Test_List_SortReverseRange()
+    Dim l As DotNetList: Set l = Net.NewList()
+    l.Add "b": l.Add "a": l.Add "B"
+    l.Sort
+    AssertEqual "B,a,b", l.Join()                                    ' binary compare
+    l.Reverse
+    AssertEqual "b,a,B", l.Join()
+    Dim n As DotNetList: Set n = Net.NewList()
+    n.Add 10: n.Add 9: n.Add 100
+    n.Sort
+    AssertEqual "9,10,100", n.Join()
+    Dim r As DotNetList: Set r = n.GetRange(1, 2)
+    AssertEqual "10,100", r.Join()
+    AssertEqual 3, n.Count
+    Dim arr() As Variant: arr = n.ToArray()
+    AssertEqual 0, LBound(arr)
+    AssertEqual 2, UBound(arr)
+    AssertEqual 100, arr(2)
+    Dim e As DotNetList: Set e = Net.NewList()
+    arr = e.ToArray()
+    AssertEqual -1, UBound(arr)
+    AssertEqual "", e.Join()
+    n.Add Net.NewList()
+    On Error Resume Next
+    n.Sort
+    AssertRaised vbObjectError + 1006
+    Set r = n.GetRange(2, 5)
+    AssertRaised vbObjectError + 1002
+    On Error GoTo 0
+End Sub
+
+Public Sub Test_List_ForEachAndGrowth()
+    Dim l As DotNetList: Set l = Net.NewList()
+    Dim i As Long
+    For i = 1 To 1000: l.Add i: Next
+    AssertEqual 1000, l.Count
+    Dim total As Double, v As Variant
+    For Each v In l
+        total = total + v
+    Next
+    AssertEqual 500500, total
+End Sub
+
+Public Sub Test_List_WriteAllLinesAcceptsList()
+    Dim dir As String: dir = NewTempDir()
+    Dim l As DotNetList: Set l = Net.NewList()
+    l.Add "x": l.Add "y"
+    Net.File.WriteAllLines dir & "\l.txt", l
+    AssertEqual "x" & vbCrLf & "y" & vbCrLf, Net.File.ReadAllText(dir & "\l.txt")
+    Net.File.AppendAllLines dir & "\l.txt", l
+    AssertEqual 3, UBound(Net.File.ReadAllLines(dir & "\l.txt"))
+End Sub

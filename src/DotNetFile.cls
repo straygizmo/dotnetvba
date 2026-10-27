@@ -262,14 +262,15 @@ Private Sub AppendCore(ByVal path As String, ByVal contents As String, ByVal enc
     WriteTextCore path, contents, encoding, memberName
 End Sub
 
-' Joins the elements with CRLF and terminates the last line, as File.WriteAllLines does.
+' Joins the elements (an array or a DotNetList) with CRLF and terminates the last line, as File.WriteAllLines does.
 Private Function JoinLines(ByVal lines As Variant, ByVal memberName As String) As String
     Dim parts() As String
     Dim lower As Long
     Dim upper As Long
     Dim i As Long
+    If TypeName(lines) = "DotNetList" Then lines = lines.ToArray()
     If Not IsArray(lines) Then
-        ThrowDotNet DotNetArgument, "DotNetFile." & memberName, "The value must be an array. (Parameter 'lines')"
+        ThrowDotNet DotNetArgument, "DotNetFile." & memberName, "The value must be an array or a DotNetList. (Parameter 'lines')"
     End If
     On Error GoTo Unallocated
     lower = LBound(lines)

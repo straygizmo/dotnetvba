@@ -40,3 +40,8 @@ Public Property Get Environment() As DotNetEnvironment
     If mEnvironment Is Nothing Then Set mEnvironment = New DotNetEnvironment
     Set Environment = mEnvironment
 End Property
+
+' Returns a new, empty DotNetList on every call.
+Public Function NewList() As DotNetList
+    Set NewList = New DotNetList
+End Function
