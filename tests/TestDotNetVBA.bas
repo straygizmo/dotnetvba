@@ -752,3 +752,40 @@ Public Sub Test_List_WriteAllLinesAcceptsList()
     Net.File.AppendAllLines dir & "\l.txt", l
     AssertEqual 3, UBound(Net.File.ReadAllLines(dir & "\l.txt"))
 End Sub
+
+Public Sub Test_IniFile_ReadWrite()
+    Dim dir As String: dir = NewTempDir()
+    Dim p As String: p = dir & "\c.ini"
+    AssertEqual "dflt", Net.IniFile.ReadString(p, "S", "k", "dflt")       ' missing file -> default
+    Net.IniFile.WriteString p, "S", "k", "v1"                              ' creates file
+    AssertTrue Net.File.Exists(p)
+    AssertEqual "v1", Net.IniFile.ReadString(p, "S", "k")
+    AssertEqual "v1", Net.IniFile.ReadString(p, "s", "K")                  ' case-insensitive
+    Net.IniFile.WriteString p, "S", "k", "v2"
+    AssertEqual "v2", Net.IniFile.ReadString(p, "S", "k")
+    Net.IniFile.WriteString p, "S", "k2", ""
+    AssertEqual "", Net.IniFile.ReadString(p, "S", "k2", "dflt")           ' blank value is "", not default
+    Net.IniFile.WriteString p, "T", "x", "1"
+    AssertArrayEqual Split("S,T", ","), Net.IniFile.GetSections(p)
+    AssertArrayEqual Split("k,k2", ","), Net.IniFile.GetKeys(p, "S")
+    Net.IniFile.DeleteKey p, "S", "k2"
+    AssertArrayEqual Split("k", ","), Net.IniFile.GetKeys(p, "S")
+    Net.IniFile.DeleteSection p, "T"
+    AssertArrayEqual Split("S", ","), Net.IniFile.GetSections(p)
+    AssertEqual -1, UBound(Net.IniFile.GetKeys(p, "missing"))
+    On Error Resume Next
+    Net.IniFile.WriteString dir & "\nodir\c.ini", "S", "k", "v"
+    AssertRaised vbObjectError + 1004
+    Net.IniFile.ReadString "", "S", "k"
+    AssertRaised vbObjectError + 1001
+    On Error GoTo 0
+End Sub
+
+Public Sub Test_IniFile_RelativePathIsResolved()
+    Dim dir As String: dir = NewTempDir()
+    Dim saved As String: saved = Net.Directory.GetCurrentDirectory()
+    Net.Directory.SetCurrentDirectory dir
+    Net.IniFile.WriteString "rel.ini", "S", "k", "v"
+    AssertTrue Net.File.Exists(dir & "\rel.ini"), "relative path must resolve against the current directory, not the Windows folder"
+    Net.Directory.SetCurrentDirectory saved
+End Sub

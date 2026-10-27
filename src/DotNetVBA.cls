@@ -16,6 +16,7 @@ Private mPath As DotNetPath
 Private mDirectory As DotNetDirectory
 Private mFile As DotNetFile
 Private mEnvironment As DotNetEnvironment
+Private mIniFile As DotNetIniFile
 
 Public Property Get Version() As String
     Version = VERSION_STRING
@@ -39,6 +40,11 @@ End Property
 Public Property Get Environment() As DotNetEnvironment
     If mEnvironment Is Nothing Then Set mEnvironment = New DotNetEnvironment
     Set Environment = mEnvironment
+End Property
+
+Public Property Get IniFile() As DotNetIniFile
+    If mIniFile Is Nothing Then Set mIniFile = New DotNetIniFile
+    Set IniFile = mIniFile
 End Property
 
 ' Returns a new, empty DotNetList on every call.
