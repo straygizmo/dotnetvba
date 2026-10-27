@@ -480,3 +480,110 @@ Public Sub Test_Directory_SetCurrentDirectoryRelative()
     Net.Directory.SetCurrentDirectory saved
     AssertEqual dir & "\sub", after
 End Sub
+
+Public Sub Test_File_ExistsCopyMoveDelete()
+    Dim dir As String: dir = NewTempDir()
+    Dim p As String: p = dir & "\a.txt"
+    AssertFalse Net.File.Exists("")
+    AssertFalse Net.File.Exists(p)
+    Net.File.WriteAllText p, "hello"
+    AssertTrue Net.File.Exists(p)
+    AssertFalse Net.File.Exists(dir)                                 ' folder is not a file
+    Net.File.Copy p, dir & "\b.txt"
+    AssertEqual "hello", Net.File.ReadAllText(dir & "\b.txt")
+    On Error Resume Next
+    Net.File.Copy p, dir & "\b.txt"
+    AssertRaised vbObjectError + 1005                                ' exists, no overwrite
+    Net.File.Copy "", dir & "\c.txt"
+    AssertRaised vbObjectError + 1001
+    Net.File.Copy dir & "\missing.txt", dir & "\c.txt"
+    AssertRaised vbObjectError + 1003
+    On Error GoTo 0
+    Net.File.WriteAllText p, "new"
+    Net.File.Copy p, dir & "\b.txt", True
+    AssertEqual "new", Net.File.ReadAllText(dir & "\b.txt")
+    Net.File.Move dir & "\b.txt", dir & "\c.txt"
+    AssertFalse Net.File.Exists(dir & "\b.txt")
+    AssertTrue Net.File.Exists(dir & "\c.txt")
+    Net.File.Move p, dir & "\c.txt", True
+    AssertEqual "new", Net.File.ReadAllText(dir & "\c.txt")
+    Net.File.Delete dir & "\c.txt"
+    Net.File.Delete dir & "\c.txt"                                   ' no error when missing
+    AssertFalse Net.File.Exists(dir & "\c.txt")
+End Sub
+
+Public Sub Test_File_Utf8NoBom()
+    Dim dir As String: dir = NewTempDir()
+    Dim p As String: p = dir & "\u.txt"
+    Dim s As String: s = "A" & ChrW(&H3042) & "B"
+    Net.File.WriteAllText p, s
+    Dim b() As Byte: b = ReadBytes(p)
+    AssertEqual 4, UBound(b)                                         ' 'A' + 3 bytes + 'B' = 5 bytes, no BOM
+    AssertEqual 65, b(0)
+    AssertEqual s, Net.File.ReadAllText(p)
+    Dim bom(0 To 3) As Byte: bom(0) = &HEF: bom(1) = &HBB: bom(2) = &HBF: bom(3) = 65
+    WriteBytes p, bom
+    AssertEqual "A", Net.File.ReadAllText(p)                         ' BOM tolerated on read
+End Sub
+
+Public Sub Test_File_OtherEncodings()
+    Dim dir As String: dir = NewTempDir()
+    Dim s As String: s = "A" & ChrW(&H3042)
+    Net.File.WriteAllText dir & "\sj.txt", s, "shift_jis"
+    AssertEqual 2, UBound(ReadBytes(dir & "\sj.txt"))                ' 1 + 2 bytes
+    AssertEqual s, Net.File.ReadAllText(dir & "\sj.txt", "shift_jis")
+    Net.File.WriteAllText dir & "\u16.txt", s, "utf-16"
+    AssertEqual s, Net.File.ReadAllText(dir & "\u16.txt", "utf-16")
+End Sub
+
+Public Sub Test_File_Lines()
+    Dim dir As String: dir = NewTempDir()
+    Dim p As String: p = dir & "\l.txt"
+    Dim want(0 To 2) As String: want(0) = "a": want(1) = "": want(2) = "c"
+    Net.File.WriteAllLines p, want
+    AssertEqual "a" & vbCrLf & vbCrLf & "c" & vbCrLf, Net.File.ReadAllText(p)
+    AssertArrayEqual want, Net.File.ReadAllLines(p)
+    WriteTextRaw p, "a" & vbLf & vbLf & "c", "utf-8"                 ' LF, no trailing newline
+    AssertArrayEqual want, Net.File.ReadAllLines(p)
+    WriteTextRaw p, "a" & vbCr & vbCr & "c" & vbCr, "utf-8"          ' CR
+    AssertArrayEqual want, Net.File.ReadAllLines(p)
+    WriteTextRaw p, "", "utf-8"
+    AssertEqual -1, UBound(Net.File.ReadAllLines(p))                 ' empty file
+    Net.File.AppendAllText p, "x"
+    Net.File.AppendAllText p, "y"
+    AssertEqual "xy", Net.File.ReadAllText(p)
+    Dim more(0 To 0) As String: more(0) = "z"
+    Net.File.AppendAllLines p, more
+    AssertEqual "xyz" & vbCrLf, Net.File.ReadAllText(p)
+    Net.File.AppendAllText dir & "\new.txt", "q"                     ' creates when missing
+    AssertEqual "q", Net.File.ReadAllText(dir & "\new.txt")
+End Sub
+
+Public Sub Test_File_ManyLines()
+    Dim dir As String: dir = NewTempDir()
+    Dim i As Long, arr(0 To 39999) As String
+    For i = 0 To 39999: arr(i) = CStr(i): Next
+    Net.File.WriteAllLines dir & "\big.txt", arr
+    Dim r() As String: r = Net.File.ReadAllLines(dir & "\big.txt")
+    AssertEqual 39999, UBound(r)
+    AssertEqual "39999", r(39999)
+End Sub
+
+Public Sub Test_File_ErrorsAndInfo()
+    Dim dir As String: dir = NewTempDir()
+    On Error Resume Next
+    Net.File.ReadAllText dir & "\missing.txt"
+    AssertRaised vbObjectError + 1003
+    Net.File.ReadAllText ""
+    AssertRaised vbObjectError + 1001
+    Net.File.WriteAllText dir & "\nodir\x.txt", "x"
+    AssertRaised vbObjectError + 1004
+    On Error GoTo 0
+    Dim jp As String: jp = dir & "\" & ChrW(&H3042) & ".txt"
+    Net.File.WriteAllText jp, "12345"
+    AssertEqual 5, Net.File.GetLength(jp)
+    AssertTrue Abs(Now - Net.File.GetLastWriteTime(jp)) < 1 / 24
+    AssertTrue Abs(Now - Net.File.GetCreationTime(jp)) < 1 / 24
+    AssertTrue Abs(Now - Net.File.GetLastAccessTime(jp)) < 1
+    AssertEqual 0, Net.File.GetAttributes(jp) And 16                 ' not a directory bit
+End Sub
